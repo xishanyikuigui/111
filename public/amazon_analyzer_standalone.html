@@ -1,0 +1,2275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>亚马逊数据融合分析独立离线板</title>
+    <!-- Tailwind CSS v3 CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- PapaParse (CSV Reader) CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <!-- SheetJS (Excel Writer) CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['Fira Code', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .table-wrapper {
+            position: relative;
+        }
+        th {
+            user-select: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans antialiased min-h-screen pb-16">
+
+    <!-- Header -->
+    <header class="bg-slate-900 text-white py-8 px-4 sm:px-6 relative overflow-hidden shadow-md">
+        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-900/40 via-transparent to-transparent opacity-80"></div>
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6 relative z-10">
+            <div class="space-y-1.5 text-center md:text-left">
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-500 border border-amber-500/35 uppercase tracking-wider">
+                    ⭐ Standalone Offline Edition / 独立离线版
+                </span>
+                <h1 class="text-xl sm:text-2xl font-black tracking-tight flex items-center justify-center md:justify-start gap-2">
+                    📊 亚马逊电商数据融合分析离线工作台
+                </h1>
+                <p class="text-xs text-slate-400 max-w-2xl leading-relaxed">
+                    本单页面整合了与线上完全一致的智能打标与跨渠道对撞逻辑。支持导入官方标准 SQP 报告与 SP 广告报告，无需任何网络连接，即在本地完成高效的经营异动诊断。
+                </p>
+                <button onclick="loadPresetDemoData()" class="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-[11px] rounded-lg shadow-md transition-all active:translate-y-0.5 cursor-pointer">
+                    <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> 📋 载入系统预设演示数据 (Play Demo Sandbox)
+                </button>
+            </div>
+            <div class="bg-slate-800/90 border border-slate-700 p-4 rounded-xl flex items-center gap-3 text-left shrink-0 shadow-lg">
+                <i data-lucide="shield-check" class="w-10 h-10 text-emerald-400 shrink-0"></i>
+                <div>
+                    <p class="text-xs font-black text-slate-100">100% 浏览器算效安全保证</p>
+                    <p class="text-[10px] text-slate-400 mt-1 max-w-[210px] leading-relaxed">
+                        由于采用全本端解析架构，所有上传数据均直接跑在浏览器内存中，绝对不会上传任何第三方服务器，彻底防护敏感数据资产泄漏。
+                    </p>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Section -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 mt-8 space-y-8">
+        
+        <!-- Navigation Tabs Link -->
+        <div class="border-b border-slate-200 flex flex-wrap gap-1 sm:gap-2">
+            <button onclick="switchTab('sqp')" id="tab-sqp" class="tab-btn px-4 py-3 rounded-t-xl text-xs font-bold transition-all flex items-center gap-2 border-b-2 border-indigo-600 text-indigo-600 bg-white shadow-xs">
+                <i data-lucide="bar-chart-3" class="w-4 h-4"></i> 🔍 搜索绩效 (SQP大盘)
+            </button>
+            <button onclick="switchTab('ads')" id="tab-ads" class="tab-btn px-4 py-3 rounded-t-xl text-xs font-bold transition-all flex items-center gap-2 border-b-2 border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50">
+                <i data-lucide="megaphone" class="w-4 h-4"></i> 📢 广告漏斗词 (Ads推款)
+            </button>
+            <button onclick="switchTab('cross')" id="tab-cross" class="tab-btn px-4 py-3 rounded-t-xl text-xs font-bold transition-all flex items-center gap-2 border-b-2 border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50">
+                <i data-lucide="git-compare" class="w-4 h-4"></i> ↕ 交叉融合策略 (Cross)
+            </button>
+            <button onclick="switchTab('docs')" id="tab-docs" class="tab-btn px-4 py-3 rounded-t-xl text-xs font-bold transition-all flex items-center gap-2 border-b-2 border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50">
+                <i data-lucide="file-text" class="w-4 h-4"></i> 📖 说明与打标逻辑 (Docs)
+            </button>
+        </div>
+
+        <!-- Panel 1: SQP Section -->
+        <div id="panel-sqp" class="tab-panel space-y-6">
+            <div class="bg-white rounded-xl border border-slate-200 p-6 grid grid-cols-1 md:grid-cols-2 gap-6 shadow-sm">
+                <!-- Current SQP upload -->
+                <div class="space-y-3">
+                    <h3 class="text-xs font-bold text-slate-850 uppercase tracking-wider flex items-center gap-1.5">
+                        <span class="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block"></span>
+                        1. 导入当前时段 SQP 报告 CSV
+                    </h3>
+                    <label class="group flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-lg p-6 cursor-pointer bg-slate-50 hover:bg-indigo-50/25 hover:border-indigo-400 transition-all shadow-xs">
+                        <i data-lucide="sparkles" class="w-8 h-8 text-slate-400 group-hover:text-indigo-500 transition-colors mb-2"></i>
+                        <span class="text-xs font-bold text-slate-650 group-hover:text-indigo-600 transition-colors" id="sqp-file-label">选择或拖入当前 SQP CSV 文件</span>
+                        <input type="file" id="sqp-file-input" class="hidden" accept=".csv" onchange="loadCurrentSqp(this)">
+                    </label>
+                    <p class="text-[10px] text-slate-400 leading-normal" id="sqp-status">等待载入符合官方主期规格的 Search Query Performance (SQP) 报表...</p>
+                </div>
+
+                <!-- WoW SQP Upload -->
+                <div class="space-y-3">
+                    <h3 class="text-xs font-bold text-slate-850 uppercase tracking-wider flex items-center gap-1.5">
+                        <span class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
+                        2. 导入对比时段 SQP 报告 CSV (可选, 用于环比追踪)
+                    </h3>
+                    <label class="group flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-lg p-6 cursor-pointer bg-slate-50 hover:bg-amber-50/25 hover:border-amber-400 transition-all shadow-xs">
+                        <i data-lucide="file-text" class="w-8 h-8 text-slate-400 group-hover:text-amber-500 transition-colors mb-2"></i>
+                        <span class="text-xs font-bold text-slate-650 group-hover:text-amber-600 transition-colors" id="wow-file-label">选择或拖入对比 SQP CSV 文件</span>
+                        <input type="file" id="wow-file-input" class="hidden" accept=".csv" onchange="loadCompareSqp(this)">
+                    </label>
+                    <p class="text-[10px] text-slate-400 leading-normal" id="wow-status">对比期载入完成后，系统将自动融合计算大盘词更迭、购买占有率浮动并吐出异动解读。</p>
+                </div>
+            </div>
+
+            <!-- SQP Main Table Container -->
+            <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm" id="sqp-table-container" style="display: none;">
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                    <div class="flex flex-wrap items-center gap-3">
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5 bg-indigo-50 px-2.5 py-1 rounded-md text-indigo-700">
+                            🔍 搜索查询绩效占比诊断明细表
+                        </h4>
+                        <input type="text" placeholder="多关键字拼音过滤..." id="sqp-filter-input" class="px-3 py-1.5 border border-slate-200 rounded-lg text-xs w-48 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 shadow-2xs" onkeyup="renderSqpTable()">
+                    </div>
+                    <button onclick="exportSqpToExcel()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm active:translate-y-0.5 select-none cursor-pointer">
+                        <i data-lucide="download" class="w-4 h-4"></i> 导出 SQP 运营诊断账本
+                    </button>
+                </div>
+                <div class="table-wrapper max-h-[500px] overflow-auto custom-scrollbar border border-slate-200 rounded-lg bg-white shadow-2xs">
+                    <table class="w-full text-xs text-left border-collapse" id="sqp-table">
+                        <!-- Dynamic columns rendered in JS -->
+                    </table>
+                </div>
+                <!-- Pagination limit tracker -->
+                <div class="text-center pt-2" id="sqp-more-container" style="display: none;">
+                    <button onclick="loadMoreSqp()" class="px-4 py-2 border border-slate-300 shadow-2xs hover:bg-slate-50 text-xs text-indigo-600 font-bold rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer">
+                        <i data-lucide="chevron-down" class="w-4 h-4"></i> 展开加载更多词项
+                    </button>
+                </div>
+            </div>
+
+            <!-- SQP WoW Comparison Table Container -->
+            <div class="bg-amber-50/15 border-2 border-amber-200/60 rounded-xl p-5 space-y-4 shadow-sm" id="wow-table-container" style="display: none;">
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-amber-200/60 pb-3">
+                    <div>
+                        <h4 class="text-sm font-extrabold text-amber-900 flex items-center gap-2 uppercase tracking-wide">
+                            <i data-lucide="trending-up" class="w-5 h-5 text-amber-600"></i> SQP 环比追踪和需求动态解读窗
+                        </h4>
+                        <p class="text-xs text-amber-700/80 mt-1">
+                            比对当前时段和历史对比期的点击/购买占有率起伏，直观剖析大盘需求变迁及您的转化率异动。
+                        </p>
+                    </div>
+                    <button onclick="exportCompareToExcel()" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm active:translate-y-0.5 select-none cursor-pointer">
+                        <i data-lucide="download" class="w-4 h-4"></i> 导出环比诊断报表
+                    </button>
+                </div>
+                
+                <!-- WoW KPI Summary Cards always visible -->
+                <div id="wow-summary-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-amber-50/40 border border-amber-200/50 rounded-xl" style="display: none;">
+                    <!-- Dynamically populated in JS -->
+                </div>
+
+                <div class="table-wrapper max-h-[500px] overflow-auto custom-scrollbar border border-amber-200 border-dashed rounded-lg bg-white">
+                    <table class="relative w-full border-collapse" id="wow-table">
+                        <!-- Dynamic columns rendered in JS -->
+                    </table>
+                </div>
+                <!-- Pagination limit tracker -->
+                <div class="text-center pt-2" id="wow-more-container" style="display: none;">
+                    <button onclick="loadMoreCompare()" class="px-4 py-2 border border-dashed border-amber-300 bg-white shadow-2xs hover:bg-amber-50/30 text-xs text-amber-800 font-bold rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer">
+                        <i data-lucide="chevron-down" class="w-4 h-4"></i> 展开加载更多环比行
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel 2: ADS Section -->
+        <div id="panel-ads" class="tab-panel space-y-6" style="display: none;">
+            <div class="bg-white rounded-xl border border-slate-200 p-6 grid grid-cols-1 md:grid-cols-3 gap-6 shadow-sm">
+                <!-- Main Ads upload -->
+                <div class="space-y-3">
+                    <h3 class="text-xs font-bold text-slate-850 uppercase tracking-wider flex items-center gap-1.5">
+                        <span class="w-2.5 h-2.5 rounded-full bg-violet-600 inline-block"></span>
+                        1. 导入当前时段 Ads 报告 CSV
+                    </h3>
+                    <label class="group flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-lg p-6 cursor-pointer bg-slate-50 hover:bg-violet-50/20 hover:border-violet-400 transition-all shadow-xs text-center">
+                        <i data-lucide="megaphone" class="w-8 h-8 text-slate-400 group-hover:text-violet-500 transition-colors mb-1"></i>
+                        <span class="text-xs font-bold text-slate-650 group-hover:text-violet-600 transition-colors line-clamp-1" id="ads-file-label">选择或拖入当前 SP 广告 CSV</span>
+                        <input type="file" id="ads-file-input" class="hidden" accept=".csv" onchange="loadAdsReport(this)">
+                    </label>
+                    <p class="text-[10px] text-slate-400 leading-normal" id="ads-status">读取曝光量、点击数、花费、广告销售额、归因订单数、和最终转化率打标...</p>
+                </div>
+
+                <!-- WoW Ads Upload -->
+                <div class="space-y-3">
+                    <h3 class="text-xs font-bold text-slate-850 uppercase tracking-wider flex items-center gap-1.5">
+                        <span class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
+                        2. 导入对比期 Ads 报告 CSV (可选)
+                    </h3>
+                    <label class="group flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-lg p-6 cursor-pointer bg-slate-50 hover:bg-amber-50/25 hover:border-amber-400 transition-all shadow-xs text-center">
+                        <i data-lucide="file-text" class="w-8 h-8 text-slate-400 group-hover:text-amber-500 transition-colors mb-1"></i>
+                        <span class="text-xs font-bold text-slate-650 group-hover:text-amber-600 transition-colors line-clamp-1" id="ads-compare-file-label">选择或拖入对比 SP 广告 CSV</span>
+                        <input type="file" id="ads-compare-file-input" class="hidden" accept=".csv" onchange="loadCompareAds(this)">
+                    </label>
+                    <p class="text-[10px] text-slate-400 leading-normal" id="ads-compare-status">对比期载入后，系统将自动融合计算大盘广告词曝光、消耗、ACOS等环比起伏与异相诊断。</p>
+                </div>
+
+                <!-- Controls and Toggles Sliders -->
+                <div class="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col justify-center">
+                    <h4 class="text-xs font-extrabold text-slate-700 uppercase flex items-center gap-1.5 border-b border-slate-200 pb-2">
+                        <i data-lucide="sliders" class="w-4 h-4 text-violet-500"></i> 数据健康参考阈值动态卡尺
+                    </h4>
+                    <div class="space-y-3 pt-1">
+                        <div>
+                            <div class="flex justify-between text-xs font-bold text-slate-650">
+                                <span>🎯 目标 ACoS 控制上限:</span>
+                                <span class="font-mono text-violet-600 font-black" id="slider-acos-lbl">25%</span>
+                            </div>
+                            <input type="range" min="10" max="60" value="25" class="w-full h-1.5 bg-slate-200 rounded appearance-none cursor-pointer accent-violet-600 mt-1" id="target-acos" oninput="updateAdsThresholds()">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-xs font-bold text-slate-650">
+                                <span>💰 指导性最高合理 CPA:</span>
+                                <span class="font-mono text-violet-600 font-black" id="slider-cpa-lbl">$8.0</span>
+                            </div>
+                            <input type="range" min="3" max="25" step="0.5" value="8.0" class="w-full h-1.5 bg-slate-200 rounded appearance-none cursor-pointer accent-violet-600 mt-1" id="target-cpa" oninput="updateAdsThresholds()">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-xs font-bold text-slate-650">
+                                <span>📦 产品预估毛利率:</span>
+                                <span class="font-mono text-violet-600 font-black" id="slider-margin-lbl">30%</span>
+                            </div>
+                            <input type="range" min="10" max="70" value="30" class="w-full h-1.5 bg-slate-200 rounded appearance-none cursor-pointer accent-violet-600 mt-1" id="target-margin" oninput="updateAdsThresholds()">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ads Render Table -->
+            <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm" id="ads-table-container" style="display: none;">
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                    <div class="flex flex-wrap items-center gap-3">
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5 bg-violet-50 px-2.5 py-1 rounded-md text-violet-700">
+                            📢 广告推广搜广推词漏斗打标明细表
+                        </h4>
+                        <input type="text" placeholder="多关键字筛选广告词..." id="ads-filter-input" class="px-3 py-1.5 border border-slate-200 rounded-lg text-xs w-48 focus:outline-none focus:ring-2 focus:ring-violet-500 text-slate-700 shadow-2xs" onkeyup="renderAdsTable()">
+                    </div>
+                    <button onclick="exportAdsToExcel()" class="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm active:translate-y-0.5 select-none cursor-pointer">
+                        <i data-lucide="download" class="w-4 h-4"></i> 导出 Ads 策略微操表
+                    </button>
+                </div>
+                <div class="table-wrapper max-h-[500px] overflow-auto custom-scrollbar border border-slate-200 rounded-lg bg-white shadow-2xs">
+                    <table class="w-full text-xs text-left border-collapse" id="ads-table">
+                        <!-- Dynamic Ads logic mapped in JS -->
+                    </table>
+                </div>
+                <!-- Pagination limit tracker -->
+                <div class="text-center pt-2" id="ads-more-container" style="display: none;">
+                    <button onclick="loadMoreAds()" class="px-4 py-2 border border-slate-300 shadow-2xs hover:bg-slate-50 text-xs text-violet-600 font-bold rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer">
+                        <i data-lucide="chevron-down" class="w-4 h-4"></i> 展开加载更多词
+                    </button>
+                </div>
+            </div>
+
+            <!-- Ads WoW Comparison Table Container -->
+            <div class="bg-amber-50/15 border-2 border-amber-200/60 rounded-xl p-5 space-y-4 shadow-sm" id="ads-compare-container" style="display: none;">
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-amber-200/60 pb-3">
+                    <div>
+                        <h4 class="text-sm font-extrabold text-amber-900 flex items-center gap-2 uppercase tracking-wide">
+                            <i data-lucide="trending-up" class="w-5 h-5 text-amber-600"></i> Ads 广告词环比异相追踪诊断窗
+                        </h4>
+                        <p class="text-xs text-amber-700/80 mt-1 pb-1">
+                            比对当前时段和历史对比期的曝光、点击、花费、销售、ACoS、CVR等指标的环比升降，精细剖析广告词效益演进。
+                        </p>
+                    </div>
+                    <button onclick="exportAdsCompareToExcel()" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm active:translate-y-0.5 select-none cursor-pointer">
+                        <i data-lucide="download" class="w-4 h-4"></i> 导出广告环比报表
+                    </button>
+                </div>
+                <div class="table-wrapper max-h-[500px] overflow-auto custom-scrollbar border border-amber-200 border-dashed rounded-lg bg-white">
+                    <table class="relative w-full border-collapse" id="ads-compare-table">
+                        <!-- Column structures rendered dynamically -->
+                    </table>
+                </div>
+                <!-- Pagination limit tracker -->
+                <div class="text-center pt-2" id="ads-compare-more-container" style="display: none;">
+                    <button onclick="loadMoreAdsCompare()" class="px-4 py-2 border border-dashed border-amber-300 bg-white shadow-2xs hover:bg-amber-50/30 text-xs text-amber-800 font-bold rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer">
+                        <i data-lucide="chevron-down" class="w-4 h-4"></i> 展开加载更多广告环比行
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel 3: CROSS Section -->
+        <div id="panel-cross" class="tab-panel space-y-6" style="display: none;">
+            <div class="bg-amber-50/25 border-2 border-amber-200/50 rounded-xl p-6 space-y-4 shadow-xs">
+                <div class="flex items-center gap-3">
+                    <i data-lucide="git-compare" class="w-7 h-7 text-amber-600 shrink-0"></i>
+                    <div>
+                        <h4 class="text-sm font-black text-amber-900 uppercase">
+                            SQP 自然大盘市占率 × Ads 广告投流效果融合碰撞矩阵 (Cross)
+                        </h4>
+                        <p class="text-xs text-amber-700 leading-relaxed mt-0.5">
+                            对撞算法通过比较关键词的<b>自然转化力(SQP CVR)</b>与<b>广告投入转化率(Ads CVR)</b>，精细剖析：
+                            <span class="rounded bg-amber-100 px-1 py-0.2 mx-0.5 font-bold">1. 流量蚕食</span> (Cannibalization)、
+                            <span class="rounded bg-amber-100 px-1 py-0.2 mx-0.5 font-bold">2. 预算漏斗错位</span>、以及
+                            <span class="rounded bg-amber-100 px-1 py-0.2 mx-0.5 font-bold">3. 渠道承接力诊断</span>。
+                        </p>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-4 bg-white/70 p-4 rounded-lg border border-amber-100/60 shadow-2xs">
+                    <div>
+                        <span class="text-xs font-bold text-slate-600">CVR 指标向上偏离度:</span>
+                        <input type="number" id="cross-cvr-high" step="0.1" value="1.2" class="ml-1 px-1.5 py-0.5 border border-slate-300 rounded text-xs w-14 text-center font-mono focus:outline-none focus:ring-1 focus:ring-amber-500">
+                    </div>
+                    <div>
+                        <span class="text-xs font-bold text-slate-600">CVR 指标向下偏离度:</span>
+                        <input type="number" id="cross-cvr-low" step="0.1" value="0.8" class="ml-1 px-1.5 py-0.5 border border-slate-300 rounded text-xs w-14 text-center font-mono focus:outline-none focus:ring-1 focus:ring-amber-500">
+                    </div>
+                    <div>
+                        <span class="text-xs font-bold text-slate-600">自然霸词占有率设定(%):</span>
+                        <input type="number" id="cross-share-thresh" step="1" value="15" class="ml-1 px-1.5 py-0.5 border border-slate-300 rounded text-xs w-14 text-center font-mono focus:outline-none focus:ring-1 focus:ring-amber-500">
+                    </div>
+                    <button onclick="buildCrossMatrix()" class="ml-auto bg-amber-500 hover:bg-amber-600 text-white px-5 py-2 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all shadow-sm active:translate-y-0.5 cursor-pointer">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i> 合成双融漏斗打标决策矩阵
+                    </button>
+                </div>
+            </div>
+
+            <!-- Cross Render Table -->
+            <div class="bg-white border border-slate-200 rounded-xl p-5 space-y-4 shadow-sm" id="cross-table-container" style="display: none;">
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                    <div class="flex flex-wrap items-center gap-3">
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5 bg-amber-50 px-2.5 py-1 rounded-md text-amber-700">
+                            ↕ 双融打标与预算阻截诊断矩阵
+                        </h4>
+                        <input type="text" placeholder="多键复合策略检索..." id="cross-filter-input" class="px-3 py-1.5 border border-slate-200 rounded-lg text-xs w-48 focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-700 shadow-2xs" onkeyup="renderCrossTable()">
+                    </div>
+                    <button onclick="exportCrossToExcel()" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm active:translate-y-0.5 select-none cursor-pointer">
+                        <i data-lucide="download" class="w-4 h-4"></i> 导出 Cross 数据矩阵 Excel
+                    </button>
+                </div>
+                <div class="table-wrapper max-h-[500px] overflow-auto custom-scrollbar border border-slate-200 rounded-lg bg-white shadow-2xs">
+                    <table class="w-full text-xs text-left border-collapse" id="cross-table">
+                        <!-- Dynamic cross rows rendered in JS -->
+                    </table>
+                </div>
+                <!-- Pagination limit tracker -->
+                <div class="text-center pt-2" id="cross-more-container" style="display: none;">
+                    <button onclick="loadMoreCross()" class="px-4 py-2 border border-slate-300 shadow-2xs hover:bg-slate-50 text-xs text-amber-700 font-bold rounded-lg transition-all inline-flex items-center gap-1 cursor-pointer">
+                        <i data-lucide="chevron-down" class="w-4 h-4"></i> 展开加载融合行
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel 4: DOCS Section -->
+        <div id="panel-docs" class="tab-panel space-y-6" style="display: none;">
+            <div class="bg-white rounded-xl shadow-xs border border-slate-200 p-6">
+                <div class="text-center max-w-2xl mx-auto space-y-2 mb-8">
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-600 border border-indigo-100">
+                        <i data-lucide="sparkles" class="w-3 h-3 text-indigo-500"></i> 最新引擎标准 v2.1
+                    </span>
+                    <h2 class="text-xl sm:text-2xl font-black text-slate-850 tracking-tight">全模块指标字段定义与自动打标逻辑</h2>
+                    <p class="text-xs text-slate-500">
+                        本工具专为跨境电商亚马逊运营开发，致力于将复杂的 SQP 大盘报表与 SP 广告词漏斗进行深度交叉对撞，并快速输出直观、高指导性的调价与选词策略。
+                    </p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- SQP Indicator explanation -->
+                    <div class="border border-slate-100 rounded-lg p-5 bg-slate-50/50 space-y-4">
+                        <div class="flex items-center gap-2 text-slate-800 font-bold border-b border-slate-100 pb-2">
+                            <i data-lucide="file-text" class="w-5 h-5 text-indigo-500"></i>
+                            <h3 class="text-xs font-extrabold uppercase tracking-wide">🔍 搜索绩效 (SQP) 核心字段说明</h3>
+                        </div>
+                        <div class="space-y-3 text-xs text-slate-650">
+                            <div>
+                                <p class="font-bold text-slate-700">• 搜索量 / 您的订单 / 点击 / 曝光</p>
+                                <p class="mt-1 leading-relaxed text-slate-500 pl-3">品牌分析后台(Search Query Performance)的官方核心指标，反映产品在特定买家搜索行为下的自然和广告累积流量基本盘。</p>
+                            </div>
+                            <div>
+                                <p class="font-bold text-slate-700">• 购买占比 / 点击占比 / 曝光占比</p>
+                                <p class="mt-1 leading-relaxed text-slate-500 pl-3">代表该检索词下，本 ASIN 的贡献量占大盘该词总流量之比例，折射出您在各流量漏斗层级上的市占控制实力。</p>
+                            </div>
+                            <div>
+                                <p class="font-bold text-slate-700">• 点击/曝光占比比值 (Ci)</p>
+                                <p class="mt-1 leading-relaxed text-slate-500 pl-3">等于（本词点击占比 ÷ 曝光占比）。若此值 &gt; 1.1 说明产品具备强健的曝光点击引导力，通常得益于主图创意、价格及Review评级的视觉溢价。</p>
+                            </div>
+                            <div>
+                                <p class="font-bold text-slate-700">• 购买/点击占比比值 (Bi)</p>
+                                <p class="mt-1 leading-relaxed text-slate-500 pl-3">等于（本词购买占比 ÷ 点击占比）。若此值 &gt; 1.15 说明到达详情页面的买家购买决策速度极高，详情页卖点承接极为精准。</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Ads raw fields -->
+                    <div class="border border-slate-100 rounded-lg p-5 bg-slate-50/50 space-y-4">
+                        <div class="flex items-center gap-2 text-slate-800 font-bold border-b border-slate-100 pb-2">
+                            <i data-lucide="megaphone" class="w-5 h-5 text-violet-500"></i>
+                            <h3 class="text-xs font-extrabold uppercase tracking-wide">📢 广告词分析 (Ads) 核心指标说明</h3>
+                        </div>
+                        <div class="space-y-3 text-xs text-slate-650">
+                            <div>
+                                <p class="font-bold text-slate-700">• 广告投入占比 (Ad Spend Share)</p>
+                                <p class="mt-1 leading-relaxed text-slate-500 pl-3">等于（本词广告消耗 ÷ 总广告消耗）。用以监测并排查哪些词在悄然侵吞、蚕食您的预算，防止无转化词形成财务吞噬黑洞。</p>
+                            </div>
+                            <div>
+                                <p class="font-bold text-slate-700">• 直接订单率 (Direct Order Ratio)</p>
+                                <p class="mt-1 leading-relaxed text-slate-500 pl-3">直接订单/总广告订单。体现点击24小时内在同 ASIN 下支付的商品量。此比例极高（&ge;70%）说明推款精准度完美，是打爆大盘排名的最强催化剂。</p>
+                            </div>
+                            <div>
+                                <p class="font-bold text-slate-700">• CVR / CPA / CTR</p>
+                                <p class="mt-1 leading-relaxed text-slate-500 pl-3">经典的搜广推漏斗诊断指标：本工作台采用综合复合咬合算法，判定流量在点击引导率、CPA获客财务效益及转化率（CVR）上的综合平衡并生成出价推荐。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tag rules explanation -->
+                <div class="border-t border-slate-100 pt-6 mt-6 space-y-4">
+                    <h3 class="text-sm font-extrabold text-slate-800 flex items-center gap-2">
+                        <i data-lucide="shield" class="w-5 h-5 text-emerald-500"></i> 策略大盘自动交叉打标规则 (核心双融固化逻辑)
+                    </h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="bg-slate-50 p-4 rounded-lg border border-slate-150 space-y-2">
+                            <span class="text-[11px] px-2 py-0.5 font-semibold bg-emerald-100 text-emerald-800 rounded">SQP 详情承接力</span>
+                            <ul class="text-[11px] space-y-1.5 text-slate-500 pt-1 leading-normal">
+                                <li>🟢 <b>承接力碾压：</b>转化效率比值 &ge; 1.15 且产品最终转化率强于大盘同期。</li>
+                                <li>🔴 <b>价格/价值错配：</b>转化比值 &lt; 0.85 且您的溢价偏高，导致购买受阻。</li>
+                                <li>⚪ <b>承接力均衡：</b>各项指标偏失在常规界限内震荡。</li>
+                            </ul>
+                        </div>
+
+                        <div class="bg-slate-50 p-4 rounded-lg border border-slate-150 space-y-2">
+                            <span class="text-[11px] px-2 py-0.5 font-semibold bg-indigo-100 text-indigo-800 rounded">Ads 归因属性</span>
+                            <ul class="text-[11px] space-y-1.5 text-slate-500 pt-1 leading-normal">
+                                <li>🎯 <b>爆款推类型：</b>直接订单占比 &ge; 70%，代表广告完美打中核心心智，应主力卡位投算。</li>
+                                <li>🔄 <b>混合转化型：</b>直接订单占比介于 30% ~ 70%，在强相关与边缘属性中取得妥协。</li>
+                                <li>🔗 <b>矩阵引流型：</b>直接订单占比 &lt; 30%，产生跨ASIN的关联裂变引流。</li>
+                            </ul>
+                        </div>
+
+                        <div class="bg-slate-50 p-4 rounded-lg border border-slate-150 space-y-2">
+                            <span class="text-[11px] px-2 py-0.5 font-semibold bg-amber-100 text-amber-800 rounded">Cross 预算效率</span>
+                            <ul class="text-[11px] space-y-1.5 text-slate-500 pt-1 leading-normal">
+                                <li>🟢 <b>高效收割：</b>订单占比极高（&gt;10%）且广告消耗预算极低（&le;10%），极其暴利。</li>
+                                <li>🟡 <b>规模支撑：</b>消耗占比与订单转化对等偏高，系构成爆款销量的绝对底支撑。</li>
+                                <li>🔴 <b>预算黑洞：</b>曝光巨大，消耗极多（&gt;10%）但实际转化很少（&le;10%）。</li>
+                            </ul>
+                        </div>
+
+                        <div class="bg-slate-50 p-4 rounded-lg border border-slate-150 space-y-2">
+                            <span class="text-[11px] px-2 py-0.5 font-semibold bg-purple-100 text-purple-800 rounded">Cross 流量渠道关系</span>
+                            <ul class="text-[11px] space-y-1.5 text-slate-500 pt-1 leading-normal">
+                                <li>🚀 <b>增效型：</b>广告 CVR 胜过大盘 1.2 倍但自然占比落后，具有贵重的荒漠引爆增势价值。</li>
+                                <li>🛡️ <b>防守型：</b>自然卡位极其稳定，广告极少投算，适合使用极低 Bid 精细维卡防守。</li>
+                                <li>⚠️ <b>蚕食型：</b>广告花费不菲但其CVR明显偏低，可能正以亏本卡位侵蚀既得自然购买单量。</li>
+                                <li>🔥 <b>消耗型：</b>双渠道转化偏微，仅依靠巨量广告预算长效空转。</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-indigo-50/50 p-4 rounded-lg border border-indigo-100 flex gap-3 text-indigo-900 text-xs mt-6 leading-relaxed">
+                    <i data-lucide="help-circle" class="w-5 h-5 shrink-0 text-indigo-500"></i>
+                    <div>
+                        <p class="font-extrabold mb-0.5">💡 本页面重要运营指示</p>
+                        <p>1. 数据解析采用浏览器本端算力秒级完成，绝对没有信息上行共享风险，100%绝密安全。</p>
+                        <p class="mt-1">2. 双渠道交叉 (Cross) 卡碰对撞要求当前 SQP 报表与 Ads 搜索词报表中的英文检索词完美精确对碰。大盘字词包含多选非中文标记，系统已全自动清洗格式并建立联结。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- UI/UX Logic Script -->
+    <script>
+        // Core Data Stores (Align with online state vectors)
+        let sqpRawCurrent = []; // Current Sqp File raw parsed array records
+        let sqpRawCompare = [];  // Compare Sqp File raw parsed array
+        let adsRawList = [];    // Ads File raw parsed array
+        let adsRawCompare = [];  // Compare Ads File raw parsed array -- WoW
+        
+        let sqpRows = [];       // Core current SQP models matching SQPRow
+        let compareRows = [];   // WoW comparative models matching CompareRow
+        let adsRows = [];       // Ads analyst models matching AdsRow
+        let adsCompareRows = []; // Ads WoW analyst models matching AdsCompareRow -- WoW
+        let crossRows = [];     // Combined strategic matrices matching CrossRow
+
+        // Pagination/Limits
+        let sqpLimit = 100;
+        let compareLimit = 100;
+        let adsLimit = 100;
+        let adsCompareLimit = 100; // WoW limit
+        let crossLimit = 100;
+
+        // Custom Sorting States
+        let sqpSort = { key: 'qc', dir: 'desc' };
+        let compareSort = { key: 'qc_current', dir: 'desc' };
+        let adsSort = { key: 'sp', dir: 'desc' };
+        let adsCompareSort = { key: 'sp_change', dir: 'desc' };
+        let crossSort = { key: 'qc', dir: 'desc' };
+
+        // Custom Threshold Drivers
+        let targetAcos = 25;
+        let targetCpa = 8.0;
+        let targetMargin = 30;
+
+        // Unified column index parsing helper (Robust case-insensitive matcher)
+        function findColIndex(headers, keywords) {
+            // First loop: exact lowercase comparison of trimmed header values
+            let idx = headers.findIndex(h => 
+                keywords.some(k => String(h || '').trim().toLowerCase() === k.toLowerCase())
+            );
+            if (idx !== -1) return idx;
+            // Second loop: fuzzy fallback matching using index search
+            return headers.findIndex(h => 
+                keywords.some(k => String(h || '').toLowerCase().includes(k.toLowerCase()))
+            );
+        }
+
+        // Clean values safely
+        function cleanNum(val) {
+            if (val === undefined || val === null) return 0;
+            const str = String(val).replace(/,/g, '').replace(/[$¥€£]/g, '').trim();
+            const n = parseFloat(str);
+            return isNaN(n) ? 0 : n;
+        }
+
+        function cleanPct(val) {
+            if (val === undefined || val === null) return 0;
+            const str = String(val).trim();
+            const n = parseFloat(str);
+            if (isNaN(n)) return 0;
+            return str.includes('%') ? n / 100 : (n > 1 ? n / 100 : n);
+        }
+
+        function parsePriceStr(p) {
+            if (!p || String(p).trim() === '-') return 0;
+            const num = parseFloat(String(p).replace(/[^0-9.]/g, ''));
+            return isNaN(num) ? 0 : num;
+        }
+
+        // Diagnostic Logic
+        function getDiagnosis(ims, cs, bs) {
+            const ci = ims > 0 ? cs / ims : 0;
+            const bi = cs > 0 ? bs / cs : 0;
+            if (ci < 0.85 && bi < 0.85) {
+                return {
+                    t: '⚠️ 全链路衰减',
+                    ad: `全链路转弱（曝光点击比 ${ci.toFixed(2)}x, 购买点击比 ${bi.toFixed(2)}x）。主图曝光率低，产品点击转化为出货受阻，强烈建议系统优化主图并增配Coupon测试。`,
+                    c: 'bg-red-50 text-red-700 border-red-200'
+                };
+            }
+            if (ci < 0.85) {
+                return {
+                    t: '👁️ 曝光转化瓶颈',
+                    ad: `展现转化不佳（点击/曝光率 ${ci.toFixed(2)}x）。搜索展现充足但主图吸引点击低。应排查主图质感、突出核心长尾属性，或采用秒杀、降价标志吸引眼球。`,
+                    c: 'bg-amber-50 text-amber-700 border-amber-200'
+                };
+            }
+            if (bi < 0.85) {
+                return {
+                    t: '🛒 点击转化瓶颈',
+                    ad: `点击承接流失（购买/点击比 ${bi.toFixed(2)}x）。进店买家购买转化不足，强烈建议复盘详情页设计，优化首图置顶评价、新增Q&A答卷并配合优惠削弱流失。`,
+                    c: 'bg-red-50 text-red-750 border-red-200'
+                };
+            }
+            if (ci >= 1.15 && bi >= 1.15) {
+                return {
+                    t: '🏆 双效黄金收割词',
+                    ad: `双向高能霸词（点击占比 ${ci.toFixed(2)}x, 购买转化 ${bi.toFixed(2)}x）。作为主力承接流量，增加Bid，保障头部卡位，并在主力预算中优先调拨卡位。`,
+                    c: 'bg-emerald-50 text-emerald-700 border-emerald-250 font-bold'
+                };
+            }
+            return {
+                t: '✅ 全能健康词',
+                ad: `各阶段转化平缓运行（Ci ${ci.toFixed(2)}x, Bi ${bi.toFixed(2)}x）。各项流向下落基本匹配行业均线值。继续保持常规稳态预算跟进分析。`,
+                c: 'bg-slate-100 text-slate-700 border-slate-200'
+            };
+        }
+
+        // Ads Recommendation Evaluation Logic
+        function evaluateAdsRow(r, targetAcos, targetCpa) {
+            let label = '✅ 稳定投放';
+            let style = 'bg-slate-100 text-slate-700 border border-slate-200';
+            const cpa = r.to > 0 ? (r.sp / r.to) : 0;
+            const ctr = r.im > 0 ? (r.cl / r.im) : 0;
+            const cvr = r.cl > 0 ? (r.to / r.cl) : 0;
+
+            if (ctr < 0.02 && r.im > 50) {
+                label = `👁️ CTR 偏低(${(ctr*100).toFixed(1)}%)，须重构主图信息并微调Bid出价`;
+                style = 'bg-amber-50 text-amber-700 border border-amber-200';
+            } else if (cvr < 0.03 && r.cl > 15) {
+                label = `🛒 广告 CVR 不振(${(cvr*100).toFixed(1)}%)，承接跳转较差，需配置大额 Coupon 促单`;
+                style = 'bg-red-50 text-red-650 border border-red-200';
+            } else if (r.ac > targetAcos / 100 * 1.3) {
+                label = `💰 ACoS 高超标(${(r.ac*100).toFixed(1)}% > ${targetAcos}%)，建议下压 Bid 竞价并加精细词`;
+                style = 'bg-red-50 text-red-700 border border-red-250';
+            } else if (cpa > targetCpa * 1.5 && r.to > 0) {
+                label = `📉 获客成本过高(CPA $${cpa.toFixed(1)} > 期望 $${targetCpa})，需重做特定卡位溢价比例`;
+                style = 'bg-amber-50 text-amber-700 border border-amber-200';
+            }
+            return { label, style };
+        }
+
+        // 1. Single-period Current SQP CSV parsing
+        function loadCurrentSqp(el) {
+            const file = el.files[0];
+            if (!file) return;
+            document.getElementById('sqp-file-label').textContent = file.name;
+            document.getElementById('sqp-status').innerHTML = '⏳ 正在解析当前周期 SQP CSV 数据...';
+
+            Papa.parse(file, {
+                header: false,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    try {
+                        const rows = results.data;
+                        if (rows.length < 2) throw new Error('表格层级行数不足');
+                        let headerIdx = -1;
+                        for (let i = 0; i < Math.min(rows.length, 12); i++) {
+                            if (rows[i].some(c => String(c).includes('搜索查询'))) {
+                                headerIdx = i;
+                                break;
+                            }
+                        }
+                        if (headerIdx === -1) {
+                            throw new Error('未识别到标准的「搜索查询词」或「搜索查询」列首。');
+                        }
+
+                        const headers = rows[headerIdx].map(x => String(x || '').trim());
+                        const colMap = {
+                            kw: findColIndex(headers, ['检索词', '搜索查询词', 'search query', 'search query term', '关键词']),
+                            qc: findColIndex(headers, ['搜索查询量', 'search query volume', '搜索查询频次']),
+                            imp: findColIndex(headers, ['展现量：asin 数量', 'impression count: asin count', '展现量：asin数量', '展现量: asin数量']),
+                            clk: findColIndex(headers, ['点击量：asin 数量', 'click count: asin count', '点击量：asin数量', '点击量: asin数量']),
+                            ord: findColIndex(headers, ['购买量：asin 数量', 'purchase count: asin count', '购买量：asin数量', '购买量: asin数量']),
+                            mp: findColIndex(headers, ['购买量：价格（中位数）', 'purchase count: median price']),
+                            ap: findColIndex(headers, ['购买量：asin 价格（中位数）', 'purchase count: asin median price']),
+                            tc: findColIndex(headers, ['点击量：总数', 'click count: overall total']),
+                            to: findColIndex(headers, ['购买量：总数', 'purchase count: overall total'])
+                        };
+
+                        if (colMap.kw === -1 || colMap.imp === -1 || colMap.clk === -1 || colMap.ord === -1) {
+                            throw new Error('CSV中缺少关键数据（如搜索查询、曝光量、点击量、购买量）。');
+                        }
+
+                        const parsedRows = [];
+                        for (let i = headerIdx + 1; i < rows.length; i++) {
+                            const r = rows[i];
+                            if (!r || r.length <= Math.max(...Object.values(colMap))) continue;
+                            const kw = String(r[colMap.kw] || '').trim();
+                            if (!kw) continue;
+
+                            parsedRows.push({
+                                kw: kw,
+                                qc: colMap.qc !== -1 ? cleanNum(r[colMap.qc]) : 0,
+                                imp: cleanNum(r[colMap.imp]),
+                                clk: cleanNum(r[colMap.clk]),
+                                ord: cleanNum(r[colMap.ord]),
+                                mp: colMap.mp !== -1 ? String(r[colMap.mp] || '-').trim() : '-',
+                                ap: colMap.ap !== -1 ? String(r[colMap.ap] || '-').trim() : '-',
+                                tc: colMap.tc !== -1 ? cleanNum(r[colMap.tc]) : 0,
+                                to: colMap.to !== -1 ? cleanNum(r[colMap.to]) : 0
+                            });
+                        }
+
+                        const validRows = parsedRows.filter(r => r.imp > 0 || r.clk > 0 || r.ord > 0);
+                        if (validRows.length === 0) {
+                            throw new Error('未筛选出本ASIN点击/曝/购的有效行记录。');
+                        }
+
+                        sqpRawCurrent = validRows;
+                        document.getElementById('sqp-file-label').textContent = file.name;
+                        document.getElementById('sqp-status').innerHTML = `✅ 成功解析当前时段共 ${validRows.length} 条有效词记录`;
+                        
+                        document.getElementById('sqp-table-container').style.display = 'block';
+                        processSqpReport();
+                    } catch (e) {
+                        document.getElementById('sqp-status').innerHTML = `❌ 错误：${e.message}`;
+                    }
+                }
+            });
+        }
+
+        // 2. WoW Compare SQP CSV parsing
+        function loadCompareSqp(el) {
+            const file = el.files[0];
+            if (!file) return;
+            document.getElementById('sqp-compare-file-label').textContent = file.name;
+            document.getElementById('sqp-compare-status').innerHTML = '⏳ 正在解析环比周期 CSV 数据...';
+
+            Papa.parse(file, {
+                header: false,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    try {
+                        const rows = results.data;
+                        if (rows.length < 2) throw new Error('表格层级行数不足');
+                        let headerIdx = -1;
+                        for (let i = 0; i < Math.min(rows.length, 12); i++) {
+                            if (rows[i].some(c => String(c).includes('搜索查询'))) {
+                                headerIdx = i;
+                                break;
+                            }
+                        }
+                        if (headerIdx === -1) {
+                            throw new Error('未识别到标准的「搜索查询词」或「搜索查询」列首。');
+                        }
+
+                        const headers = rows[headerIdx].map(x => String(x || '').trim());
+                        const colMap = {
+                            kw: findColIndex(headers, ['检索词', '搜索查询词', 'search query', 'search query term', '关键词']),
+                            qc: findColIndex(headers, ['搜索查询量', 'search query volume', '搜索查询频次']),
+                            imp: findColIndex(headers, ['展现量：asin 数量', 'impression count: asin count', '展现量：asin数量', '展现量: asin数量']),
+                            clk: findColIndex(headers, ['点击量：asin 数量', 'click count: asin count', '点击量：asin数量', '点击量: asin数量']),
+                            ord: findColIndex(headers, ['购买量：asin 数量', 'purchase count: asin count', '购买量：asin数量', '购买量: asin数量']),
+                            mp: findColIndex(headers, ['购买量：价格（中位数）', 'purchase count: median price']),
+                            ap: findColIndex(headers, ['购买量：asin 价格（中位数）', 'purchase count: asin median price']),
+                            tc: findColIndex(headers, ['点击量：总数', 'click count: overall total']),
+                            to: findColIndex(headers, ['购买量：总数', 'purchase count: overall total'])
+                        };
+
+                        if (colMap.kw === -1 || colMap.imp === -1 || colMap.clk === -1 || colMap.ord === -1) {
+                            throw new Error('CSV中缺少关键数据（如搜索查询、曝光量、点击量、购买量）。');
+                        }
+
+                        const nextProcessed = [];
+                        for (let i = headerIdx + 1; i < rows.length; i++) {
+                            const r = rows[i];
+                            if (!r || r.length <= Math.max(...Object.values(colMap))) continue;
+                            const kw = String(r[colMap.kw] || '').trim();
+                            if (!kw) continue;
+
+                            const qc = colMap.qc !== -1 ? cleanNum(r[colMap.qc]) : 0;
+                            const imp = cleanNum(r[colMap.imp]);
+                            const clk = cleanNum(r[colMap.clk]);
+                            const ord = cleanNum(r[colMap.ord]);
+                            const tc = colMap.tc !== -1 ? cleanNum(r[colMap.tc]) : 0;
+                            const to = colMap.to !== -1 ? cleanNum(r[colMap.to]) : 0;
+
+                            nextProcessed.push({
+                                kw: kw,
+                                qc: qc,
+                                imp: imp,
+                                clk: clk,
+                                ord: ord,
+                                buyShare: to > 0 ? ord / to : 0,
+                                clickShare: tc > 0 ? clk / tc : 0,
+                                impShare: tc > 0 ? imp / tc : 0,
+                                marketCVR: tc > 0 ? to / tc : 0,
+                                asinCVR: clk > 0 ? ord / clk : 0,
+                                marketPrice: colMap.mp !== -1 ? parsePriceStr(r[colMap.mp]) : 0,
+                                asinPrice: colMap.ap !== -1 ? parsePriceStr(r[colMap.ap]) : 0
+                            });
+                        }
+
+                        if (nextProcessed.length === 0) {
+                            throw new Error('对比期未筛选出有效词语数据。');
+                        }
+
+                        const allKeys = new Set();
+                        sqpRows.forEach(r => allKeys.add(r.kw.toLowerCase().trim()));
+                        nextProcessed.forEach(r => allKeys.add(r.kw.toLowerCase().trim()));
+
+                        compareRows = [];
+                        allKeys.forEach(key => {
+                            const cur = sqpRows.find(r => r.kw.toLowerCase().trim() === key) || {
+                                kw: key, qc: 0, ord: 0, clk: 0, imp: 0, buyShare: 0, clickShare: 0, impShare: 0,
+                                marketCVR: 0, asinCVR: 0, marketPrice: 0, asinPrice: 0
+                            };
+                            const nxt = nextProcessed.find(r => r.kw.toLowerCase().trim() === key) || {
+                                kw: key, qc: 0, ord: 0, clk: 0, imp: 0, buyShare: 0, clickShare: 0, impShare: 0,
+                                marketCVR: 0, asinCVR: 0, marketPrice: 0, asinPrice: 0
+                            };
+
+                            const qcChange = cur.qc === 0 ? (nxt.qc === 0 ? 0 : 1.0) : ((nxt.qc - cur.qc) / cur.qc);
+                            const ordChange = cur.ord === 0 ? (nxt.ord === 0 ? 0 : 1.0) : ((nxt.ord - cur.ord) / cur.ord);
+                            const clkChange = cur.clk === 0 ? (nxt.clk === 0 ? 0 : 1.0) : ((nxt.clk - cur.clk) / cur.clk);
+                            const impChange = cur.imp === 0 ? (nxt.imp === 0 ? 0 : 1.0) : ((nxt.imp - cur.imp) / cur.imp);
+
+                            const buyShareChange = nxt.buyShare - cur.buyShare;
+                            const clickShareChange = nxt.clickShare - cur.clickShare;
+                            const impShareChange = nxt.impShare - cur.impShare;
+
+                            const marketPriceChange = cur.marketPrice === 0 ? (nxt.marketPrice === 0 ? 0 : 1.0) : ((nxt.marketPrice - cur.marketPrice) / cur.marketPrice);
+                            const asinPriceChange = cur.asinPrice === 0 ? (nxt.asinPrice === 0 ? 0 : 1.0) : ((nxt.asinPrice - cur.asinPrice) / cur.asinPrice);
+                            const marketCVRChange = cur.marketCVR === 0 ? (nxt.marketCVR === 0 ? 0 : 1.0) : ((nxt.marketCVR - cur.marketCVR) / cur.marketCVR);
+                            const asinCVRChange = cur.asinCVR === 0 ? (nxt.asinCVR === 0 ? 0 : 1.0) : ((nxt.asinCVR - cur.asinCVR) / cur.asinCVR);
+
+                            const curHelp = { ...cur, marketPrice: cur.marketPrice, asinPrice: cur.asinPrice };
+                            const nxtHelp = { ...nxt, marketPrice: nxt.marketPrice, asinPrice: nxt.asinPrice };
+                            const trendText = getTrendInterpretation(curHelp, nxtHelp);
+
+                            compareRows.push({
+                                kw: cur.kw || nxt.kw,
+                                qc_current: cur.qc,
+                                qc_next: nxt.qc,
+                                qc_change: qcChange,
+                                ord_current: cur.ord,
+                                ord_next: nxt.ord,
+                                ord_change: ordChange,
+                                clk_current: cur.clk,
+                                clk_next: nxt.clk,
+                                clk_change: clkChange,
+                                imp_current: cur.imp,
+                                imp_next: nxt.imp,
+                                imp_change: impChange,
+                                buyShare_current: cur.buyShare,
+                                buyShare_next: nxt.buyShare,
+                                buyShare_change: buyShareChange,
+                                clickShare_current: cur.clickShare,
+                                clickShare_next: nxt.clickShare,
+                                clickShare_change: clickShareChange,
+                                impShare_current: cur.impShare,
+                                impShare_next: nxt.impShare,
+                                impShare_change: impShareChange,
+                                marketPrice_current: cur.marketPrice,
+                                marketPrice_next: nxt.marketPrice,
+                                marketPrice_change: marketPriceChange,
+                                asinPrice_current: cur.asinPrice,
+                                asinPrice_next: nxt.asinPrice,
+                                asinPrice_change: asinPriceChange,
+                                marketCVR_current: cur.marketCVR,
+                                marketCVR_next: nxt.marketCVR,
+                                marketCVR_change: marketCVRChange,
+                                asinCVR_current: cur.asinCVR,
+                                asinCVR_next: nxt.asinCVR,
+                                asinCVR_change: asinCVRChange,
+                                trend: trendText
+                            });
+                        });
+
+                        document.getElementById('wow-table-container').style.display = 'block';
+                        renderCompareTable();
+                    } catch (e) {
+                        document.getElementById('sqp-compare-status').innerHTML = `❌ 错误：${e.message}`;
+                    }
+                }
+        }
+
+        }
+
+        // Processing Raw SQP array into rich models for Single Period
+        function processSqpReport() {
+            if (sqpRawCurrent.length === 0) return;
+            sqpRows = sqpRawCurrent.map(r => {
+                const mpNum = typeof r.mp === 'number' ? r.mp : parsePriceStr(r.mp);
+                const apNum = typeof r.ap === 'number' ? r.ap : parsePriceStr(r.ap);
+
+                // Calculations
+                const tcClean = r.tc || 0;
+                const toClean = r.to || 0;
+                const clkClean = r.clk || 0;
+                const ordClean = r.ord || 0;
+                const impClean = r.imp || 0;
+
+                const clickImpRatio = impClean > 0 ? clkClean / impClean : 0;
+                const buyClickRatio = clkClean > 0 ? ordClean / clkClean : 0;
+                const buyShare = toClean > 0 ? ordClean / toClean : 0;
+                const clickShare = tcClean > 0 ? clkClean / tcClean : 0;
+                const impShare = tcClean > 0 ? impClean / tcClean : 0; // Estimation
+
+                const diag = getDiagnosis(impShare, clickShare, buyShare);
+
+                return {
+                    kw: r.kw,
+                    qc: r.qc || 0,
+                    imp: impClean,
+                    clk: clkClean,
+                    ord: ordClean,
+                    buyShare: buyShare,
+                    clickShare: clickShare,
+                    impShare: impShare,
+                    clickImpRatio: clickImpRatio,
+                    buyClickRatio: buyClickRatio,
+                    mp: mpNum,
+                    ap: apNum,
+                    marketCVR: tcClean > 0 ? toClean / tcClean : 0,
+                    asinCVR: clkClean > 0 ? ordClean / clkClean : 0,
+                    convTag: diag.t,
+                    advice: diag.ad
+                };
+            });
+            renderSqpTable();
+        }
+
+        function processSqpCompare() {
+            if (sqpRawCurrent.length === 0 || sqpRawCompare.length === 0) return;
+            
+            // Map sqpRawCompare to processed objects
+            const nextProcessed = sqpRawCompare.map(r => {
+                const mpNum = typeof r.mp === 'number' ? r.mp : parsePriceStr(r.mp);
+                const apNum = typeof r.ap === 'number' ? r.ap : parsePriceStr(r.ap);
+                const tcClean = r.tc || 0;
+                const toClean = r.to || 0;
+                const clkClean = r.clk || 0;
+                const ordClean = r.ord || 0;
+                
+                return {
+                    kw: r.kw,
+                    qc: r.qc || 0,
+                    imp: r.imp || 0,
+                    clk: clkClean,
+                    ord: ordClean,
+                    buyShare: toClean > 0 ? ordClean / toClean : 0,
+                    clickShare: tcClean > 0 ? clkClean / tcClean : 0,
+                    impShare: tcClean > 0 ? (r.imp || 0) / tcClean : 0,
+                    marketCVR: tcClean > 0 ? toClean / tcClean : 0,
+                    asinCVR: clkClean > 0 ? ordClean / clkClean : 0,
+                    marketPrice: mpNum,
+                    asinPrice: apNum
+                };
+            });
+
+            // Map sqpRows first if not already mapped
+            processSqpReport();
+
+            const allKeys = new Set();
+            sqpRows.forEach(r => allKeys.add(r.kw.toLowerCase().trim()));
+            nextProcessed.forEach(r => allKeys.add(r.kw.toLowerCase().trim()));
+
+            compareRows = [];
+            allKeys.forEach(key => {
+                const cur = sqpRows.find(r => r.kw.toLowerCase().trim() === key) || {
+                    kw: key, qc: 0, ord: 0, clk: 0, imp: 0, buyShare: 0, clickShare: 0, impShare: 0,
+                    marketCVR: 0, asinCVR: 0, marketPrice: 0, asinPrice: 0
+                };
+                const nxt = nextProcessed.find(r => r.kw.toLowerCase().trim() === key) || {
+                    kw: key, qc: 0, ord: 0, clk: 0, imp: 0, buyShare: 0, clickShare: 0, impShare: 0,
+                    marketCVR: 0, asinCVR: 0, marketPrice: 0, asinPrice: 0
+                };
+
+                const qcChange = cur.qc === 0 ? (nxt.qc === 0 ? 0 : 1.0) : ((nxt.qc - cur.qc) / cur.qc);
+                const ordChange = cur.ord === 0 ? (nxt.ord === 0 ? 0 : 1.0) : ((nxt.ord - cur.ord) / cur.ord);
+                const clkChange = cur.clk === 0 ? (nxt.clk === 0 ? 0 : 1.0) : ((nxt.clk - cur.clk) / cur.clk);
+                const impChange = cur.imp === 0 ? (nxt.imp === 0 ? 0 : 1.0) : ((nxt.imp - cur.imp) / cur.imp);
+
+                const buyShareChange = nxt.buyShare - cur.buyShare;
+                const clickShareChange = nxt.clickShare - cur.clickShare;
+                const impShareChange = nxt.impShare - cur.impShare;
+
+                const marketPriceChange = cur.marketPrice === 0 ? (nxt.marketPrice === 0 ? 0 : 1.0) : ((nxt.marketPrice - cur.marketPrice) / cur.marketPrice);
+                const asinPriceChange = cur.asinPrice === 0 ? (nxt.asinPrice === 0 ? 0 : 1.0) : ((nxt.asinPrice - cur.asinPrice) / cur.asinPrice);
+                const marketCVRChange = cur.marketCVR === 0 ? (nxt.marketCVR === 0 ? 0 : 1.0) : ((nxt.marketCVR - cur.marketCVR) / cur.marketCVR);
+                const asinCVRChange = cur.asinCVR === 0 ? (nxt.asinCVR === 0 ? 0 : 1.0) : ((nxt.asinCVR - cur.asinCVR) / cur.asinCVR);
+
+                const curHelp = { ...cur, marketPrice: cur.marketPrice, asinPrice: cur.asinPrice };
+                const nxtHelp = { ...nxt, marketPrice: nxt.marketPrice, asinPrice: nxt.asinPrice };
+                const trendText = getTrendInterpretation(curHelp, nxtHelp);
+
+                compareRows.push({
+                    kw: cur.kw || nxt.kw,
+                    qc_current: cur.qc,
+                    qc_next: nxt.qc,
+                    qc_change: qcChange,
+                    ord_current: cur.ord,
+                    ord_next: nxt.ord,
+                    ord_change: ordChange,
+                    clk_current: cur.clk,
+                    clk_next: nxt.clk,
+                    clk_change: clkChange,
+                    imp_current: cur.imp,
+                    imp_next: nxt.imp,
+                    imp_change: impChange,
+                    buyShare_current: cur.buyShare,
+                    buyShare_next: nxt.buyShare,
+                    buyShare_change: buyShareChange,
+                    clickShare_current: cur.clickShare,
+                    clickShare_next: nxt.clickShare,
+                    clickShare_change: clickShareChange,
+                    impShare_current: cur.impShare,
+                    impShare_next: nxt.impShare,
+                    impShare_change: impShareChange,
+                    marketPrice_current: cur.marketPrice,
+                    marketPrice_next: nxt.marketPrice,
+                    marketPrice_change: marketPriceChange,
+                    asinPrice_current: cur.asinPrice,
+                    asinPrice_next: nxt.asinPrice,
+                    asinPrice_change: asinPriceChange,
+                    marketCVR_current: cur.marketCVR,
+                    marketCVR_next: nxt.marketCVR,
+                    marketCVR_change: marketCVRChange,
+                    asinCVR_current: cur.asinCVR,
+                    asinCVR_next: nxt.asinCVR,
+                    asinCVR_change: asinCVRChange,
+                    trend: trendText
+                });
+            });
+
+            document.getElementById('sqp-compare-status').innerHTML = `✅ <b>大盘双时段环比解析完成！</b> 追踪到 ${compareRows.length} 组关联词包。`;
+            document.getElementById('wow-table-container').style.display = 'block';
+            renderCompareTable();
+        }
+
+        function renderSqpTable() {
+            const table = document.getElementById('sqp-table');
+            const searchVal = document.getElementById('sqp-filter-input').value.toLowerCase().trim();
+            const btnMore = document.getElementById('sqp-more-container');
+
+            const filteredRows = sqpRows.filter(r => !searchVal || r.kw.toLowerCase().includes(searchVal));
+
+            if (sqpSort.key) {
+                const k = sqpSort.key;
+                const d = sqpSort.dir === 'asc' ? 1 : -1;
+                filteredRows.sort((a, b) => {
+                    let va = a[k];
+                    let vb = b[k];
+                    if (typeof va === 'string') return va.localeCompare(vb) * d;
+                    return (va - vb) * d;
+                });
+            }
+
+            // Update KPI summary cards
+            const totalImpVal = filteredRows.reduce((sum, r) => sum + r.imp, 0);
+            const totalClkVal = filteredRows.reduce((sum, r) => sum + r.clk, 0);
+            const totalOrdVal = filteredRows.reduce((sum, r) => sum + r.ord, 0);
+            const avgCvrVal = totalClkVal > 0 ? totalOrdVal / totalClkVal : 0;
+            const highLevelCount = filteredRows.filter(r => r.convTag && r.convTag.includes('🟢')).length;
+
+            document.getElementById('sqp-kpi-count').textContent = filteredRows.length;
+            document.getElementById('sqp-kpi-orders').textContent = totalOrdVal;
+            document.getElementById('sqp-kpi-cvr').textContent = (avgCvrVal * 100).toFixed(2) + '%';
+            document.getElementById('sqp-kpi-high').textContent = highLevelCount;
+
+            let html = `<thead>
+                <tr class="bg-indigo-50/50 border-b border-indigo-200 text-slate-500 text-[10px] font-semibold sticky top-0 z-20 bg-white">
+                    \\${getSortHeader('sqp', 'kw', '搜索查询词', 'left')}
+                    \\${getSortHeader('sqp', 'qc', '搜索查询量')}
+                    \\${getSortHeader('sqp', 'imp', '您的曝光')}
+                    \\${getSortHeader('sqp', 'clk', '您的点击')}
+                    \\${getSortHeader('sqp', 'ord', '您的订单')}
+                    \\${getSortHeader('sqp', 'buyShare', '购买占比', 'center')}
+                    \\${getSortHeader('sqp', 'clickShare', '点击占比', 'center')}
+                    \\${getSortHeader('sqp', 'impShare', '曝光占比', 'center')}
+                    \\${getSortHeader('sqp', 'clickImpRatio', '点曝光占比', 'center')}
+                    \\${getSortHeader('sqp', 'buyClickRatio', '购点占比', 'center')}
+                    <th class="p-3 text-center text-indigo-950 font-bold uppercase whitespace-nowrap">市场价格中值</th>
+                    <th class="p-3 text-center text-indigo-950 font-bold uppercase whitespace-nowrap">本ASIN购买均价</th>
+                    \\${getSortHeader('sqp', 'marketCVR', '大盘平均CVR', 'right')}
+                    \\${getSortHeader('sqp', 'asinCVR', '本ASIN CVR', 'right')}
+                    <th class="p-3 text-center text-indigo-950 font-bold uppercase whitespace-nowrap">详情页转化标签</th>
+                    <th class="p-3 text-left min-w-[280px] text-indigo-950 font-bold uppercase whitespace-nowrap">亚马逊漏斗诊断与流量操作建议</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-indigo-100 text-xs text-slate-700 font-medium">`;
+
+            if (filteredRows.length > 0) {
+                let tot_qc = 0, tot_imp = 0, tot_clk = 0, tot_ord = 0;
+                let tot_buyShare = 0, tot_clickShare = 0, tot_impShare = 0;
+                let tot_mp = 0, tot_ap = 0, count_mp = 0, count_ap = 0;
+
+                filteredRows.forEach(r => {
+                    tot_qc += r.qc || 0;
+                    tot_imp += r.imp || 0;
+                    tot_clk += r.clk || 0;
+                    tot_ord += r.ord || 0;
+                    tot_buyShare += r.buyShare || 0;
+                    tot_clickShare += r.clickShare || 0;
+                    tot_impShare += r.impShare || 0;
+
+                    const mpF = typeof r.mp === 'number' ? r.mp : parsePriceStr(r.mp);
+                    const apF = typeof r.ap === 'number' ? r.ap : parsePriceStr(r.ap);
+                    if (mpF > 0) { tot_mp += mpF; count_mp++; }
+                    if (apF > 0) { tot_ap += apF; count_ap++; }
+                });
+
+                const tot_clickImpRatio = tot_imp > 0 ? tot_clk / tot_imp : 0;
+                const tot_buyClickRatio = tot_clk > 0 ? tot_ord / tot_clk : 0;
+                const avg_mp = count_mp > 0 ? tot_mp / count_mp : 0;
+                const avg_ap = count_ap > 0 ? tot_ap / count_ap : 0;
+                const tot_marketCVR = filteredRows.reduce((acc, r) => acc + (r.marketCVR || 0), 0) / (filteredRows.length || 1);
+                const tot_asinCVR = tot_clk > 0 ? tot_ord / tot_clk : 0;
+
+                html += `<tfoot class="sticky bottom-0 z-20 bg-indigo-100 text-indigo-950 border-t-2 border-indigo-200">
+                    <tr class="font-extrabold bg-indigo-150">
+                        <td class="p-3 sticky left-0 bottom-0 bg-indigo-100 z-30 font-black border-r border-indigo-200">全量聚合汇算</td>
+                        <td class="p-3 text-right font-mono text-indigo-950">\\${tot_qc.toLocaleString()}</td>
+                        <td class="p-3 text-right font-mono text-indigo-950">\\${tot_imp.toLocaleString()}</td>
+                        <td class="p-3 text-right font-mono text-indigo-950">\\${tot_clk.toLocaleString()}</td>
+                        <td class="p-3 text-right font-mono text-indigo-950">\\${tot_ord.toLocaleString()}</td>
+                        <td class="p-3 text-center font-mono">\\${(tot_buyShare * 100).toFixed(2)}%</td>
+                        <td class="p-3 text-center font-mono">\\${(tot_clickShare * 100).toFixed(2)}%</td>
+                        <td class="p-3 text-center font-mono">\\${(tot_impShare * 100).toFixed(2)}%</td>
+                        <td class="p-3 text-center font-mono">\\${tot_clickImpRatio.toFixed(2)}x</td>
+                        <td class="p-3 text-center font-mono text-indigo-900">\\${(tot_buyClickRatio * 100).toFixed(2)}%</td>
+                        <td class="p-3 text-center font-mono">$\\${avg_mp.toFixed(1)}</td>
+                        <td class="p-3 text-center font-mono">$\\${avg_ap.toFixed(1)}</td>
+                        <td class="p-3 text-center font-mono text-indigo-900">\\${(tot_marketCVR * 100).toFixed(2)}%</td>
+                        <td class="p-3 text-center font-mono text-indigo-950">\\${(tot_asinCVR * 100).toFixed(2)}%</td>
+                        <td class="p-3 text-center text-indigo-950 bg-indigo-50/10">汇总一致</td>
+                        <td class="p-3 text-left font-black text-indigo-950 bg-indigo-50/10">大盘单期全体检索聚合诊断完成</td>
+                    </tr>
+                </tfoot>`;
+            }
+
+            const displayed = filteredRows.slice(0, sqpLimit);
+            if (displayed.length === 0) {
+                html += `<tr><td colspan="16" class="p-8 text-center text-slate-400">没有查找到符合条件的搜索绩效数据。</td></tr>`;
+            } else {
+                displayed.forEach(r => {
+                    const mpFloat = typeof r.mp === 'number' ? r.mp : parsePriceStr(r.mp);
+                    const apFloat = typeof r.ap === 'number' ? r.ap : parsePriceStr(r.ap);
+                    html += `<tr class="hover:bg-indigo-50/30 transition-colors text-slate-700 bg-white">
+                        <td class="p-3 font-semibold text-slate-900 sticky left-0 bg-slate-50 border-r border-indigo-100">\${r.kw}</td>
+                        <td class="p-3 text-right font-mono">\${r.qc.toLocaleString()}</td>
+                        <td class="p-3 text-right font-mono">\${r.imp.toLocaleString()}</td>
+                        <td class="p-3 text-right font-mono">\${r.clk.toLocaleString()}</td>
+                        <td class="p-3 text-right font-mono font-semibold text-slate-900">\${r.ord.toLocaleString()}</td>
+                        <td class="p-3 text-center font-mono">\${(r.buyShare * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-center font-mono">\${(r.clickShare * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-center font-mono">\${(r.impShare * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-center font-mono">\${r.clickImpRatio.toFixed(2)}x</td>
+                        <td class="p-3 text-center font-mono font-semibold text-slate-800">\${(r.buyClickRatio * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-center font-mono text-slate-500">$\${mpFloat.toFixed(1)}</td>
+                        <td class="p-3 text-center font-mono text-slate-500">$\${apFloat.toFixed(1)}</td>
+                        <td class="p-3 text-center font-mono text-slate-500">\${(r.marketCVR * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-center font-mono font-bold text-slate-800">\${(r.asinCVR * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-center">
+                            <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold border \${r.convTag.includes('⚠️') ? 'bg-red-50 text-red-700 border-red-100' : r.convTag.includes('👁️') ? 'bg-amber-50 text-amber-700 border-amber-100' : r.convTag.includes('🏆') ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-700 border-slate-200'}">
+                                \${r.convTag}
+                            </span>
+                        </td>
+                        <td class="p-3 text-left text-[11px] leading-relaxed text-slate-500 font-medium">\${r.advice}</td>
+                    </tr>`;
+                });
+            }
+
+            html += `</tbody>`;
+            table.innerHTML = html;
+
+            if (filteredRows.length > sqpLimit) {
+                btnMore.style.display = 'block';
+            } else {
+                btnMore.style.display = 'none';
+            }
+            safeRenderIcons();
+        }
+
+        function loadMoreSqp() {
+            sqpLimit += 100;
+            renderSqpTable();
+        }
+
+        // Render WoW table compare row helper lines
+        function trendIndicator(current, delta) {
+            if (current === 0) return `<span class="text-slate-400 font-mono">—</span>`;
+            const isUp = delta > 0;
+            const isZero = delta === 0;
+            const textNum = Math.abs(delta * 100).toFixed(1) + '%';
+            return `<span class="inline-flex items-center gap-0.5 font-mono font-bold text-xs ${isUp ? 'text-emerald-600' : isZero ? 'text-slate-500' : 'text-red-500'}">
+                ${isUp ? '▲' : isZero ? '●' : '▼'}${textNum}
+            </span>`;
+        }
+
+        function ppIndicator(delta) {
+            const isUp = delta > 0;
+            const isZero = delta === 0;
+            const textNum = Math.abs(delta * 100).toFixed(2) + 'pp';
+            return `<span class="inline-flex items-center gap-0.5 font-mono font-bold text-xs ${isUp ? 'text-emerald-600' : isZero ? 'text-slate-500' : 'text-red-500'}">
+                ${isUp ? '▲' : isZero ? '●' : '▼'}${textNum}
+            </span>`;
+        }
+
+        let placeholder_top;
+        // Cleaned up part 1
+
+            const displayed = filteredRows.slice(0, compareLimit);
+
+            if (displayed.length === 0) {
+                html += `<tr><td colspan="24" class="p-8 text-center text-slate-400">没有比对词信息结构。</td></tr>`;
+            } else {
+                displayed.forEach(cr => {
+                    html += `<tr class="hover:bg-amber-500/5 transition-colors text-slate-700 bg-white">
+                        <td class="p-3 font-semibold text-amber-955 sticky left-0 bg-slate-50 border-r border-amber-100">${cr.kw}</td>
+                        <td class="p-3 text-right font-mono">${cr.qc_current.toLocaleString()}</td>
+                        <td class="p-3 text-right font-mono">${cr.qc_next.toLocaleString()}</td>
+                        <td class="p-3 text-center bg-amber-50/10">${trendIndicator(cr.qc_current, cr.qc_change)}</td>
+                        <td class="p-3 text-right font-mono font-semibold">${cr.ord_current}</td>
+                        <td class="p-3 text-right font-mono font-semibold">${cr.ord_next}</td>
+                        <td class="p-3 text-center bg-amber-50/10">${trendIndicator(cr.ord_current, cr.ord_change)}</td>
+                        <td class="p-3 text-right font-mono">${cr.clk_current}</td>
+                        <td class="p-3 text-right font-mono">${cr.clk_next}</td>
+                        <td class="p-3 text-center">${trendIndicator(cr.clk_current, cr.clk_change)}</td>
+                        <td class="p-3 text-center font-mono">${(cr.buyShare_current * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-center font-mono">${(cr.buyShare_next * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-center bg-amber-50/10">${ppIndicator(cr.buyShare_change)}</td>
+                        <td class="p-3 text-center font-mono">${(cr.clickShare_current * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-center font-mono">${(cr.clickShare_next * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-center">${ppIndicator(cr.clickShare_change)}</td>
+                        <td class="p-3 text-center font-mono text-slate-650">$${cr.marketPrice_current.toFixed(1)}</td>
+                        <td class="p-3 text-center font-mono font-bold text-slate-900">$${cr.marketPrice_next.toFixed(1)}</td>
+                        <td class="p-3 text-right font-mono text-slate-450">${(cr.marketCVR_current * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-right font-mono font-bold text-slate-800">${(cr.asinCVR_next * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-left font-semibold text-amber-955 text-[11px] leading-relaxed">${cr.trend}</td>
+                    </tr>`;
+                });
+            }div class="text-[10px] font-mono text-slate-400">\\${(tot_asinCVR_current * 100).toFixed(2)}% → \\${(tot_asinCVR_next * 100).toFixed(2)}%</div>
+                        </div>
+                        <div class="text-[10px] text-slate-450 flex items-center justify-between mt-1.5 pt-1.5 border-t border-slate-100">
+                            <span>前期: \\${(tot_asinCVR_current * 100).toFixed(2)}%</span>
+                            <span>净变: <span class="font-bold \\${(tot_asinCVR_next - tot_asinCVR_current) >= 0 ? "text-emerald-600" : "text-red-500"}">\\${(tot_asinCVR_next - tot_asinCVR_current) >= 0 ? '+' : ''}\\${((tot_asinCVR_next - tot_asinCVR_current) * 100).toFixed(2)}pp</span></span>
+                        </div>
+                    </div>
+                `;
+            } else {
+                cardsContainer.style.display = 'none';
+            }
+
+            const displayed = filteredRows.slice(0, compareLimit);
+
+            if (displayed.length === 0) {
+                html += `<tr><td colspan="24" class="p-8 text-center text-slate-400">没有比对词信息结构。</td></tr>`;
+            } else {
+                displayed.forEach(cr => {
+                    html += `<tr class="hover:bg-amber-500/5 transition-colors text-slate-700 bg-white">
+                        <td class="p-3 font-semibold text-amber-955 sticky left-0 bg-slate-50 border-r border-amber-100">\${cr.kw}</td>
+                        <td class="p-3 text-right font-mono">\${cr.qc_current.toLocaleString()}</td>
+                        <td class="p-3 text-right font-mono">\${cr.qc_next.toLocaleString()}</td>
+                        <td class="p-3 text-center bg-amber-50/10">\${trendIndicator(cr.qc_current, cr.qc_change)}</td>
+                        <td class="p-3 text-right font-mono font-semibold">\${cr.ord_current}</td>
+                        <td class="p-3 text-right font-mono font-semibold">\${cr.ord_next}</td>
+                        <td class="p-3 text-center bg-amber-50/10">\${trendIndicator(cr.ord_current, cr.ord_change)}</td>
+                        <td class="p-3 text-right font-mono">\${cr.clk_current}</td>
+                        <td class="p-3 text-right font-mono">\${cr.clk_next}</td>
+                        <td class="p-3 text-center">\${trendIndicator(cr.clk_current, cr.clk_change)}</td>
+                        <td class="p-3 text-center font-mono">\${(cr.buyShare_current * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-center font-mono">\${(cr.buyShare_next * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-center bg-amber-50/10">\${ppIndicator(cr.buyShare_change)}</td>
+                        <td class="p-3 text-center font-mono">\${(cr.clickShare_current * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-center font-mono">\${(cr.clickShare_next * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-center">\${ppIndicator(cr.clickShare_change)}</td>
+                        <td class="p-3 text-center font-mono text-slate-650">$\${cr.marketPrice_current.toFixed(1)}</td>
+                        <td class="p-3 text-center font-mono font-bold text-slate-900">$\${cr.marketPrice_next.toFixed(1)}</td>
+                        <td class="p-3 text-center font-mono text-slate-500">\${(cr.marketCVR_current * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-center font-mono font-bold text-slate-800">\${(cr.marketCVR_next * 100).        function loadMoreCompare() {
+            compareLimit += 100;
+            renderCompareTable();
+        }
+
+        // 3. Parse Ads Report File                  <td class="p-3 font-semibold text-amber-950 sticky left-0 bg-slate-50 border-r border-amber-100">${cr.kw}</td>
+                        <td class="p-3 text-right font-mono">${cr.qc_current.toLocaleString()}</td>
+                        <td class="p-3 text-right font-mono">${cr.qc_next.toLocaleString()}</td>
+                        <td class="p-3 text-center bg-amber-50/10">${trendIndicator(cr.qc_current, cr.qc_change)}</td>
+                        <td class="p-3 text-right font-mono font-semibold">${cr.ord_current}</td>
+                        <td class="p-3 text-right font-mono font-semibold">${cr.ord_next}</td>
+                        <td class="p-3 text-center bg-amber-50/10">${trendIndicator(cr.ord_current, cr.ord_change)}</td>
+                        <td class="p-3 text-right font-mono">${cr.clk_current}</td>
+                        <td class="p-3 text-right font-mono">${cr.clk_next}</td>
+                        <td class="p-3 text-center">${trendIndicator(cr.clk_current, cr.clk_change)}</td>
+                        <td class="p-3 text-center font-mono">${(cr.buyShare_current * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-center font-mono">${(cr.buyShare_next * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-center bg-amber-50/10">${ppIndicator(cr.buyShare_change)}</td>
+                        <td class="p-3 text-center font-mono">${(cr.clickShare_current * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-center font-mono">${(cr.clickShare_next * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-center">${ppIndicator(cr.clickShare_change)}</td>
+                        <td class="p-3 text-center font-mono text-slate-650">$${cr.marketPrice_current.toFixed(1)}</td>
+                        <td class="p-3 text-center font-mono font-bold text-slate-900">$${cr.marketPrice_next.toFixed(1)}</td>
+                        <td class="p-3 text-right font-mono text-slate-450">${(cr.marketCVR_current * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-right font-mono font-bold text-slate-800">${(cr.asinCVR_next * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-left font-semibold text-amber-950 text-[11px] leading-relaxed">${cr.trend}</td>
+                    </tr>`;
+                });
+            }
+
+            html += `</tbody>`;
+
+            // Sticky table footer to keep sum aligned perfectly at the bottom scroll boundary
+            if (filteredRows.length > 0) {
+                html += `<tfoot class="sticky bottom-0 z-20 bg-amber-100 text-slate-900 border-t-2 border-amber-250 shadow-[0_-4px_12px_rgba(245,158,11,0.08)]">
+                    <tr class="font-bold bg-amber-100">
+                        <td class="p-3 sticky left-0 bottom-0 bg-amber-100 font-extrabold border-r border-amber-200 z-30">数据总和</td>
+                        <td class="p-3 text-right font-mono font-extrabold">${tot_qc_current.toLocaleString()}</td>
+                        <td class="p-3 text-right font-mono font-extrabold">${tot_qc_next.toLocaleString()}</td>
+                        <td class="p-3 text-center font-extrabold bg-amber-50/15">${trendIndicator(tot_qc_current, tot_qc_change)}</td>
+                        <td class="p-3 text-right font-mono font-extrabold">${tot_ord_current.toLocaleString()}</td>
+                        <td class="p-3 text-right font-mono font-extrabold">${tot_ord_next.toLocaleString()}</td>
+                        <td class="p-3 text-center font-extrabold bg-amber-50/15">${trendIndicator(tot_ord_current, tot_ord_change)}</td>
+                        <td class="p-3 text-right font-mono font-extrabold">${tot_clk_current.toLocaleString()}</td>
+                        <td class="p-3 text-right font-mono font-extrabold">${tot_clk_next.toLocaleString()}</td>
+                        <td class="p-3 text-center font-extrabold">${trendIndicator(tot_clk_current, tot_clk_change)}</td>
+                        <td class="p-3 text-center font-mono font-extrabold">${(tot_buyShare_current * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-center font-mono font-extrabold">${(tot_buyShare_next * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-center font-extrabold bg-amber-50/15">${ppIndicator(tot_buyShare_change)}</td>
+                        <td class="p-3 text-center font-mono font-extrabold">${(tot_clickShare_current * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-center font-mono font-extrabold">${(tot_clickShare_next * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-center font-extrabold">${ppIndicator(tot_clickShare_change)}</td>
+                        <td class="p-3 text-center font-mono font-extrabold text-slate-700">$${tot_marketPrice_current_avg.toFixed(1)}</td>
+                        <td class="p-3 text-center font-mono font-extrabold text-slate-900">$${tot_marketPrice_next_avg.toFixed(1)}</td>
+                        <td class="p-3 text-right font-mono text-slate-550 font-extrabold">${(tot_asinCVR_current * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-right font-mono text-slate-900 font-extrabold">${(tot_asinCVR_next * 100).toFixed(1)}%</td>
+                        <td class="p-3 text-left font-bold text-amber-955 bg-amber-50/20">大盘双周期全部环比数据诊断自适应完成</td>
+                    </tr>
+                </tfoot>`;
+            }
+
+            html += `</tbody>`;
+            table.innerHTML = html;
+
+            if (filteredRows.length > compareLimit) {
+                btnMore.style.display = 'block';
+            } else {
+                btnMore.style.display = 'none';
+            }
+        }
+
+        function loadMoreCompare() {
+            compareLimit += 100;
+            renderCompareTable();
+        }
+
+        // 3. Parse Ads Report File
+        function loadAdsReport(el) {
+            const file = el.files[0];
+            if (!file) return;
+            document.getElementById('ads-file-label').textContent = file.name;
+            document.getElementById('ads-status').innerHTML = '⏳ 正在解析 Ads 广告词报告 CSV 数据...';
+
+            Papa.parse(file, {
+                header: false,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    try {
+                        const rows = results.data;
+                        if (rows.length < 2) throw new Error('数据为空或无足够行');
+                        let headerIdx = -1;
+                        for (let i = 0; i < Math.min(rows.length, 12); i++) {
+                            if (rows[i].some(c => String(c).includes('用户搜索词') || String(c).trim().toLowerCase() === 'customer search term')) {
+                                headerIdx = i;
+                                break;
+                            }
+                        }
+                        if (headerIdx === -1) {
+                            throw new Error('未识别到标准的广告列名称（如「用户搜索词」或「Customer Search Term」）');
+                        }
+
+                        const headers = rows[headerIdx].map(x => String(x || '').trim());
+                        
+                        const colMap = {
+                            kw: findColIndex(headers, ['用户搜索词', 'customer search term', 'search term']),
+                            fr: findColIndex(headers, ['词频', 'frequency']),
+                            im: findColIndex(headers, ['曝光量', 'impressions', '展现量']),
+                            cl: findColIndex(headers, ['点击', 'clicks', '点击量']),
+                            ct: findColIndex(headers, ['ctr', '点击率']),
+                            cp: findColIndex(headers, ['cpc', '点击成本']),
+                            sp: findColIndex(headers, ['花费', 'spend', '广告花费']),
+                            ts: findColIndex(headers, ['广告销售额', 'sales', '销售额']),
+                            ds: findColIndex(headers, ['直接销售额', 'direct sales']),
+                            ac: findColIndex(headers, ['acos', 'acos%']),
+                            to: findColIndex(headers, ['广告订单', 'orders', '订单量', '订单数']),
+                            do: findColIndex(headers, ['直接订单', 'direct orders']),
+                            ca: findColIndex(headers, ['cpa', 'cpa($)']),
+                            cv: findColIndex(headers, ['cvr', '转化率', '广告cvr'])
+                        };
+
+                        if (colMap.kw === -1 || colMap.im === -1 || colMap.sp === -1) {
+                            throw new Error('缺少关键数据项！（必须包括：用户搜索词、曝光量、和花费）');
+                        }
+
+                        const list = [];
+                        let skippedTotals = 0;
+
+                        for (let i = headerIdx + 1; i < rows.length; i++) {
+                            const r = rows[i];
+                            if (!r || r.length <= Math.max(...Object.values(colMap))) continue;
+                            const kw = String(r[colMap.kw]).trim();
+                            if (!kw) continue;
+
+                            if (/总和|总计|合计|total|grand|summary|all/i.test(kw)) {
+                                skippedTotals++;
+                                continue;
+                            }
+
+                            list.push({
+                                kw: kw,
+                                fr: colMap.fr !== -1 ? cleanNum(r[colMap.fr]) : 0,
+                                im: cleanNum(r[colMap.im]),
+                                cl: cleanNum(r[colMap.cl]),
+                                ct: colMap.ct !== -1 ? cleanPct(r[colMap.ct]) : (cleanNum(r[colMap.cl]) / (cleanNum(r[colMap.im]) || 1)),
+                                cp: colMap.cp !== -1 ? cleanNum(r[colMap.cp]) : (cleanNum(r[colMap.sp]) / (cleanNum(r[colMap.cl]) || 1)),
+                                sp: colMap.sp !== -1 ? cleanNum(r[colMap.sp]) : 0,
+                                ts: colMap.ts !== -1 ? cleanNum(r[colMap.ts]) : 0,
+                                ds: colMap.ds !== -1 ? cleanNum(r[colMap.ds]) : 0,
+                                ac: colMap.ac !== -1 ? cleanPct(r[colMap.ac]) : (cleanNum(r[colMap.sp]) / (cleanNum(r[colMap.ts]) || 1)),
+                                to: colMap.to !== -1 ? cleanNum(r[colMap.to]) : 0,
+                                do: colMap.do !== -1 ? cleanNum(r[colMap.do]) : 0,
+                                ca: colMap.ca !== -1 ? cleanNum(r[colMap.ca]) : 0,
+                                cv: colMap.cv !== -1 ? cleanPct(r[colMap.cv]) : (cleanNum(r[colMap.to]) / (cleanNum(r[colMap.cl]) || 1))
+                            });
+                        }
+
+                        adsRawList = list;
+                        document.getElementById('ads-status').innerHTML = `✅ <b>开播广告报告载入完毕！</b>成功解析 ${list.length} 条有效广告搜索推广词（自动排除了 ${skippedTotals} 条尾部汇总行）。`;
+                        document.getElementById('ads-table-container').style.display = 'block';
+
+                        processAdsReports();
+
+                    } catch(err) {
+                        document.getElementById('ads-status').innerHTML = `❌ <b>读取广告报告错误：</b> ${err.message}`;
+                    }
+                }
+            });
+        }
+
+        // Core compilation of Ads entries
+        function processAdsReports() {
+            if (adsRawList.length === 0) return;
+
+            const raw = adsRawList;
+            const totalOrders = raw.reduce((sum, r) => sum + r.to, 0);
+            const totalSpend = raw.reduce((sum, r) => sum + r.sp, 0);
+
+            adsRows = raw.map(r => {
+                const info = evaluateAdsRow(r, targetAcos, targetCpa);
+                const directRatio = r.to > 0 ? r.do / r.to : 0;
+                
+                let attrTag = '🔄 混合转化型';
+                let attrClass = 'bg-blue-50 text-blue-600 border border-blue-100';
+
+                if (directRatio < 0.3) {
+                    attrTag = '🔗 矩阵引流型';
+                    attrClass = 'bg-purple-50 text-purple-600 border border-purple-100';
+                } else if (directRatio >= 0.7) {
+                    attrTag = '🎯 爆款推类型';
+                    attrClass = 'bg-emerald-50 text-emerald-600 border border-emerald-100';
+                }
+
+                return {
+                    ...r,
+                    aos: totalOrders > 0 ? r.to / totalOrders : 0,
+                    adSpendShare: totalSpend > 0 ? r.sp / totalSpend : 0,
+                    attrTag,
+                    attrClass,
+                    diagText: info.t,
+                    diagClass: info.c,
+                    cpa: info.cpa,
+                    ctr: info.ctr,
+                    cvr: info.cvr
+                };
+            });
+
+            renderAdsTable();
+        }
+
+        // Rendering main Ads table
+        function renderAdsTable() {
+            const table = document.getElementById('ads-table');
+            const searchVal = document.getElementById('ads-filter-input').value.toLowerCase().trim();
+            const btnMore = document.getElementById('ads-more-container');
+
+            let html = `<thead>
+                <tr class="bg-violet-50/70 border-b border-violet-150 text-[10px] text-slate-600 font-bold uppercase sticky top-0 bg-white z-10">
+                    ${getSortHeader('ads', 'kw', '搜索推广词', 'left')}
+                    ${getSortHeader('ads', 'im', '曝光量')}
+                    ${getSortHeader('ads', 'cl', '点击数')}
+                    ${getSortHeader('ads', 'ctr', 'CTR', 'center')}
+                    ${getSortHeader('ads', 'sp', '花费')}
+                    ${getSortHeader('ads', 'ts', '广告销售')}
+                    ${getSortHeader('ads', 'ac', 'ACoS', 'center')}
+                    ${getSortHeader('ads', 'to', '订单数', 'center')}
+                    <th class="p-3 text-center text-slate-600 font-bold uppercase whitespace-nowrap">直接/引流</th>
+                    ${getSortHeader('ads', 'cvr', '广告CVR', 'center')}
+                    ${getSortHeader('ads', 'cpa', '单均CPA')}
+                    <th class="p-3 text-left min-w-[240px] text-slate-600 font-bold uppercase whitespace-nowrap">漏斗级优先动作和修改出价策略</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-150 bg-white text-xs">`;
+
+            const filteredRows = adsRows.filter(r => !searchVal || r.kw.toLowerCase().includes(searchVal));
+            if (adsSort.key) {
+                const k = adsSort.key;
+                const d = adsSort.dir === 'asc' ? 1 : -1;
+                filteredRows.sort((a, b) => {
+                    let va = a[k];
+                    let vb = b[k];
+                    if (typeof va === 'string') {
+                        return va.localeCompare(vb) * d;
+                    }
+                    return (va - vb) * d;
+                });
+            }
+            const displayed = filteredRows.slice(0, adsLimit);
+
+            if (displayed.length === 0) {
+                html += `<tr><td colspan="12" class="p-8 text-center text-slate-400">无可提取的过滤结果。</td></tr>`;
+            } else {
+                displayed.forEach(r => {
+                    html += `<tr class="hover:bg-slate-50/50">
+                        <td class="p-3 font-semibold text-slate-900">${r.kw}</td>
+                        <td class="p-3 text-right font-mono text-slate-650">${r.im.toLocaleString()}</td>
+                        <td class="p-3 text-right font-mono text-slate-650">${r.cl.toLocaleString()}</td>
+                        <td class="p-3 text-center font-mono text-slate-650">${(r.ctr*100).toFixed(2)}%</td>
+                        <td class="p-3 text-right font-mono text-indigo-700 font-medium">$${r.sp.toFixed(1)}</td>
+                        <td class="p-3 text-right font-mono text-emerald-700 font-medium">$${r.ts.toFixed(1)}</td>
+                        <td class="p-3 text-center font-mono">
+                            <span class="font-bold text-slate-800">${(r.ac*100).toFixed(1)}%</span>
+                        </td>
+                        <td class="p-3 text-center font-mono text-slate-900 font-bold">${r.to}</td>
+                        <td class="p-3 text-center">
+                            <span class="px-2 py-0.5 rounded text-[10px] whitespace-nowrap font-semibold ${r.attrClass}">
+                                ${r.attrTag}
+                            </span>
+                        </td>
+                        <td class="p-3 text-center font-mono font-medium text-slate-700">${(r.cvr*100).toFixed(1)}%</td>
+                        <td class="p-3 text-right font-mono text-slate-650">$${r.cpa.toFixed(1)}</td>
+                        <td class="p-3 max-w-[480px] min-w-[240px]">
+                            <span class="px-2.5 py-0.5 rounded text-[11px] block truncate max-w-[480px] ${r.diagClass}" title="${r.diagText}">
+                                ${r.diagText}
+                            </span>
+                        </td>
+                    </tr>`;
+                });
+            }
+
+            html += `</tbody>`;
+            table.innerHTML = html;
+
+            if (filteredRows.length > adsLimit) {
+                btnMore.style.display = 'block';
+            } else {
+                btnMore.style.display = 'none';
+            }
+        }
+
+        function loadMoreAds() {
+            adsLimit += 100;
+            renderAdsTable();
+        }
+
+        function updateAdsThresholds() {
+            targetAcos = parseFloat(document.getElementById('target-acos').value);
+            targetCpa = parseFloat(document.getElementById('target-cpa').value);
+            targetMargin = parseFloat(document.getElementById('target-margin').value);
+
+            document.getElementById('slider-acos-lbl').textContent = targetAcos + '%';
+            document.getElementById('slider-cpa-lbl').textContent = '$' + targetCpa.toFixed(1);
+            document.getElementById('slider-margin-lbl').textContent = targetMargin + '%';
+
+            processAdsReports();
+        }
+
+        // 4. Cross Matrix calculations and logic parsing
+        function buildCrossMatrix() {
+            if (sqpRows.length === 0 || adsRows.length === 0) {
+                alert('🚫 联动融合必须保证：已经加载主周期 SQP 数据 与 广告报告 数据！');
+                return;
+            }
+
+            const thHigh = parseFloat(document.getElementById('cross-cvr-high').value);
+            const thLow = parseFloat(document.getElementById('cross-cvr-low').value);
+            const thShare = parseFloat(document.getElementById('cross-share-thresh').value) / 100;
+
+            const currentAdsMap = new Map();
+            adsRows.forEach(a => currentAdsMap.set(a.kw.toLowerCase().trim(), a));
+
+            const list = [];
+            sqpRows.forEach(sqp => {
+                const queryKey = sqp.kw.toLowerCase().trim();
+                const ads = currentAdsMap.get(queryKey) || {
+                    fr: 0, im: 0, cl: 0, ct: 0, cp: 0, sp: 0, ts: 0, ds: 0, ac: 0, to: 0, do: 0, ca: 0, cv: 0, aos: 0, adSpendShare: 0
+                };
+
+                const sqpCvr = sqp.asinCVR;
+                const adsCvr = ads.cv || 0;
+
+                let cvrRatio = 0;
+                let tag = '⚖️ 均衡观察';
+                let tagClass = 'bg-slate-50 text-slate-650 border border-slate-200';
+                let advice = '维持现有出价及广告架构，处于双向对称观察期，建议每周追踪对比大盘走向。';
+
+                if (sqpCvr === 0) {
+                    if (adsCvr > 0) {
+                        tag = '🚀 增效词';
+                        tagClass = 'bg-emerald-50 text-emerald-600 border border-emerald-100';
+                        advice = `SQP自然口径本期未捕捉订单，但广告CVR展现亮眼(${(adsCvr * 100).toFixed(1)}%)。建议继续保持精准广告测试，同步对详情页主卖点及长尾描述精进，助推自然单破零。`;
+                        cvrRatio = 999;
+                    } else {
+                        tag = '⚠️ 低效/蚕食词';
+                        tagClass = 'bg-red-50 text-red-650 border border-red-100';
+                        advice = `本词在自然段和广告投入段均不产出。建议在主图或详情重构完毕前，降Bid广告出价至低位进行低消耗长尾摸索，严防多词高额空耗。`;
+                        cvrRatio = 0;
+                    }
+                } else {
+                    cvrRatio = adsCvr / sqpCvr;
+                    if (cvrRatio >= thHigh && (ads.to || 0) > 0) {
+                        tag = '🚀 增效词';
+                        tagClass = 'bg-emerald-50 text-emerald-600 border border-emerald-100';
+                        advice = `广告转化比(${cvrRatio.toFixed(1)}x)碾压自然购买承接。流量非常饱满且精准，行动建议：提高竞价(Bid)获取广告卡位，甚至开启ASIN独立词广告，迅速做大流量规模。`;
+                    } else if (cvrRatio < thLow && (ads.sp || 0) > 0) {
+                        tag = '⚠️ 低效/蚕食词';
+                        tagClass = 'bg-red-50 text-red-650 border border-red-100';
+                        advice = `广告转化效率不佳(仅为自然端的 ${cvrRatio.toFixed(2)}x)且产生广告费用。可能在自然优势词上产生不必要抢位，行动建议：调降 Bid 出价 20%，切换为 Exact 精确匹配阻绝流量泛滥。`;
+                    } else if (sqp.buyShare >= thShare && (ads.aos || 0) < 0.05) {
+                        tag = '🛡️ 自然防守词';
+                        tagClass = 'bg-purple-50 text-purple-600 border border-purple-100';
+                        advice = `本词SQP占有率极强(${(sqp.buyShare * 100).toFixed(1)}%)，自然基本盘坚不可摧对广告依赖度极低。行动建议：广告保留超低底价防守，缩减预算分拨，将腾退出的预算投资至流量潜力上升期词汇。`;
+                    } else if (sqp.qc < 250 && cvrRatio >= 1.15 && (ads.to || 0) > 0) {
+                        tag = '💡 潜力长尾词';
+                        tagClass = 'bg-amber-50 text-amber-600 border border-amber-100';
+                        advice = `属于低竞争热度但广告能快速完成首发带动的长尾词。转化率强，行动建议：开 Phrase 或 Broad 匹配继续搜洗类似的长尾客群，防止竞品超前卡位。`;
+                    } else if ((ads.aos || 0) >= 0.15 && cvrRatio < 1.0) {
+                        tag = '🔥 预算消耗词';
+                        tagClass = 'bg-rose-50 text-rose-600 border border-rose-100';
+                        advice = `广告单贡献占有极高，但转化率却显著落后。存在极高耗预算且蚕食正常自然转化率的风险，行动建议：适度缩限广告时段，核算产品最终毛利空间以评估是否控制出价。`;
+                    }
+                }
+
+                // Budget tag logic
+                const oHigh = (ads.aos || 0) > 0.10;
+                const sHigh = (ads.adSpendShare || 0) > 0.10;
+                let budTag = '⚪ 长尾观察词';
+                let budClass = 'bg-slate-50 text-slate-500 border border-slate-200';
+
+                if (oHigh && !sHigh) {
+                    budTag = '🟢 高效收割词';
+                    budClass = 'bg-emerald-50 text-emerald-600 border border-emerald-100';
+                } else if (oHigh && sHigh) {
+                    budTag = '🟡 规模支撑词';
+                    budClass = 'bg-amber-50 text-amber-600 border border-amber-100';
+                } else if (!oHigh && sHigh) {
+                    budTag = '🔴 预算黑洞词';
+                    budClass = 'bg-red-50 text-red-600 border border-red-100';
+                }
+
+                // Channel traffic dynamic relationship
+                let chanTag = '⚖️ 常规分配';
+                let chanClass = 'bg-slate-50 text-slate-500 border border-slate-200';
+
+                if (cvrRatio > 1.2 && sqp.buyShare < 0.08 && (ads.adSpendShare || 0) > 0.05) {
+                    chanTag = '🚀 增效型';
+                    chanClass = 'bg-emerald-50 text-emerald-600 border border-emerald-100';
+                } else if (cvrRatio >= 0.8 && cvrRatio <= 1.2 && sqp.buyShare > thShare && (ads.adSpendShare || 0) < 0.10) {
+                    chanTag = '🛡️ 防守型';
+                    chanClass = 'bg-purple-50 text-purple-600 border border-purple-100';
+                } else if (cvrRatio < 0.8 && sqp.buyShare > 0.10 && (ads.adSpendShare || 0) > 0.10) {
+                    chanTag = '⚠️ 蚕食型';
+                    chanClass = 'bg-rose-50 text-rose-600 border border-rose-100';
+                } else if (cvrRatio < 0.8 && sqp.buyShare < 0.10 && (ads.adSpendShare || 0) > 0.10) {
+                    chanTag = '🔥 消耗型';
+                    chanClass = 'bg-amber-50 text-amber-600 border border-amber-100';
+                }
+
+                list.push({
+                    kw: sqp.kw,
+                    qc: sqp.qc,
+                    sqpClk: sqp.clk,
+                    adsClk: ads.cl || 0,
+                    sqpOrd: sqp.ord,
+                    adsOrd: ads.to || 0,
+                    sqpBuyShare: sqp.buyShare,
+                    adsOrderShare: ads.aos || 0,
+                    adSpendShare: ads.adSpendShare || 0,
+                    marketCvr: sqp.marketCVR,
+                    budTag,
+                    budClass,
+                    chanTag,
+                    chanClass,
+                    sqpCvr,
+                    adsCvr,
+                    cvrRatio,
+                    tag,
+                    tagClass,
+                    advice,
+                    adsSpend: ads.sp || 0,
+                    adsCpc: ads.cp || 0
+                });
+            });
+
+            crossRows = list;
+            document.getElementById('cross-table-container').style.display = 'block';
+            renderCrossTable();
+        }
+
+        // Render Cross dynamic tables
+        function renderCrossTable() {
+            const table = document.getElementById('cross-table');
+            const searchVal = document.getElementById('cross-filter-input').value.toLowerCase().trim();
+            const btnMore = document.getElementById('cross-more-container');
+
+            let html = `<thead>
+                <tr class="bg-amber-50/70 border-b border-amber-200 text-[10px] text-amber-950 font-bold uppercase sticky top-0 bg-white z-10">
+                    ${getSortHeader('cross', 'kw', '流量交和汇词', 'left')}
+                    ${getSortHeader('cross', 'qc', '大盘搜词量')}
+                    ${getSortHeader('cross', 'sqpOrd', '自然ASIN订单')}
+                    ${getSortHeader('cross', 'adsOrd', '广告归因订单')}
+                    ${getSortHeader('cross', 'sqpClk', '自然点击(SQP)')}
+                    ${getSortHeader('cross', 'adsClk', '广告点击(ST)')}
+                    ${getSortHeader('cross', 'adsSpend', '广告花费')}
+                    ${getSortHeader('cross', 'sqpCvr', '自然 CVR', 'center')}
+                    ${getSortHeader('cross', 'adsCvr', '广告 CVR', 'center')}
+                    ${getSortHeader('cross', 'cvrRatio', '转化率对碰比', 'center')}
+                    ${getSortHeader('cross', 'marketCvr', '大盘均转化', 'center')}
+                    <th class="p-3 text-center text-amber-950 font-bold uppercase whitespace-nowrap">最终双融打标推荐</th>
+                    <th class="p-3 text-left min-w-[320px] text-amber-950 font-bold uppercase whitespace-nowrap">跨渠道最终对决与精细化卡位微操建议</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-amber-100 bg-white text-xs">`;
+
+            const filteredRows = crossRows.filter(r => !searchVal || r.kw.toLowerCase().includes(searchVal));
+            if (crossSort.key) {
+                const k = crossSort.key;
+                const d = crossSort.dir === 'asc' ? 1 : -1;
+                filteredRows.sort((a, b) => {
+                    let va = a[k];
+                    let vb = b[k];
+                    if (typeof va === 'string') {
+                        return va.localeCompare(vb) * d;
+                    }
+                    return (va - vb) * d;
+                });
+            }
+            const displayed = filteredRows.slice(0, crossLimit);
+
+            if (displayed.length === 0) {
+                html += `<tr><td colspan="13" class="p-8 text-center text-slate-400">无符合跨渠道融合数据。</td></tr>`;
+            } else {
+                displayed.forEach(r => {
+                    html += `<tr class="hover:bg-amber-50/15">
+                        <td class="p-3 font-semibold text-slate-900 sticky left-0 bg-slate-50 border-r border-amber-100">${r.kw}</td>
+                        <td class="p-3 text-right font-mono text-slate-650">${r.qc.toLocaleString()}</td>
+                        <td class="p-3 text-right font-mono font-bold text-slate-800">${r.sqpOrd}</td>
+                        <td class="p-3 text-right font-mono font-bold text-indigo-700">${r.adsOrd}</td>
+                        <td class="p-3 text-right font-mono text-slate-500">${r.sqpClk}</td>
+                        <td class="p-3 text-right font-mono text-slate-500">${r.adsClk}</td>
+                        <td class="p-3 text-right font-mono font-bold text-red-600">$${r.adsSpend.toFixed(1)}</td>
+                        <td class="p-3 text-center font-mono">${(r.sqpCvr*100).toFixed(1)}%</td>
+                        <td class="p-3 text-center font-mono">${(r.adsCvr*100).toFixed(1)}%</td>
+                        <td class="p-3 text-center font-mono font-bold text-slate-850">
+                            ${r.cvrRatio >= 999 ? 'N/A' : r.cvrRatio.toFixed(2) + 'x'}
+                        </td>
+                        <td class="p-3 text-center font-mono text-slate-450">${(r.marketCvr*100).toFixed(1)}%</td>
+                        <td class="p-3 text-center">
+                            <span class="px-2 py-0.5 rounded text-[10px] whitespace-nowrap font-bold ${r.tagClass}">
+                                ${r.tag}
+                            </span>
+                        </td>
+                        <td class="p-3 max-w-[480px] min-w-[280px]">
+                            <span class="block truncate max-w-[480px] text-slate-700 font-semibold text-[11px]" title="${r.advice}">${r.advice}</span>
+                        </td>
+                    </tr>`;
+                });
+            }
+
+            html += `</tbody>`;
+            table.innerHTML = html;
+
+            if (filteredRows.length > crossLimit) {
+                btnMore.style.display = 'block';
+            } else {
+                btnMore.style.display = 'none';
+            }
+        }
+
+        function loadMoreCross() {
+            crossLimit += 100;
+            renderCrossTable();
+        }
+
+        // ================== SHEETJS EXPORT BLOCK ==================
+
+        // Export Sqp to Excel (Matches online SqpPanel.tsx schema)
+        function exportSqpToExcel() {
+            if (sqpRows.length === 0) return;
+            const wb = XLSX.utils.book_new();
+            const headers = [
+                '关键词', '搜索量', 'ASIN曝光', 'ASIN点击', 'ASIN订单', 
+                '购买占比', '点击占比', '曝光占比', '点击/曝光比值', '购买/点击比值', 
+                '市场价格中值', 'ASIN价格中值', '大盘CVR', '您的CVR', '承接力标签', '漏斗量化诊断建议'
+            ];
+            const rows = sqpRows.map(r => [
+                r.kw, r.qc, r.imp, r.clk, r.ord,
+                (r.buyShare * 100).toFixed(2) + '%', (r.clickShare * 100).toFixed(2) + '%', (r.impShare * 100).toFixed(2) + '%',
+                r.clickImpRatio.toFixed(2) + 'x', r.buyClickRatio.toFixed(2) + 'x',
+                r.mp, r.ap, (r.marketCVR * 100).toFixed(2) + '%', (r.asinCVR * 100).toFixed(2) + '%',
+                r.convTag, r.advice
+            ]);
+            const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+            XLSX.utils.book_append_sheet(wb, ws, '当前时段SQP明细');
+            XLSX.writeFile(wb, `SQP_市占大盘诊断_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        }
+
+        // Export compare rows to Excel (Matches online SqpPanel.tsx schema)
+        function exportCompareToExcel() {
+            if (compareRows.length === 0) return;
+            const wb = XLSX.utils.book_new();
+            const headers = [
+                '核心词', '搜索量(前)', '搜索量(后)', '搜索环比', '订单(前)', '订单(后)', '订单环比',
+                '点击(前)', '点击(后)', '点击环比', '曝光(前)', '曝光(后)', '曝光环比',
+                '购买占有(前)', '购买占有(后)', '购买比绝对差', '点击占有(前)', '点击占有(后)', '点击比绝对差',
+                '市场单价(前)', '市场单价(后)', 'ASIN单价(前)', 'ASIN单价(后)',
+                '大盘平均CVR(前)', '大盘平均CVR(后)', 'ASIN转化率(前)', 'ASIN转化率(后)', '趋势量度解读'
+            ];
+            const rows = compareRows.map(r => [
+                r.kw, r.qc_current, r.qc_next, (r.qc_change * 100).toFixed(1) + '%',
+                r.ord_current, r.ord_next, (r.ord_change * 100).toFixed(1) + '%',
+                r.clk_current, r.clk_next, (r.clk_change * 100).toFixed(1) + '%',
+                r.imp_current, r.imp_next, (r.imp_change * 100).toFixed(1) + '%',
+                (r.buyShare_current * 100).toFixed(2) + '%', (r.buyShare_next * 100).toFixed(2) + '%', (r.buyShare_change * 100).toFixed(2) + ' pp',
+                (r.clickShare_current * 100).toFixed(2) + '%', (r.clickShare_next * 100).toFixed(2) + '%', (r.clickShare_change * 100).toFixed(2) + ' pp',
+                r.marketPrice_current, r.marketPrice_next, r.asinPrice_current, r.asinPrice_next,
+                (r.marketCVR_current * 100).toFixed(2) + '%', (r.marketCVR_next * 100).toFixed(2) + '%',
+                (r.asinCVR_current * 100).toFixed(2) + '%', (r.asinCVR_next * 100).toFixed(2) + '%',
+                r.trend
+            ]);
+            const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+            XLSX.utils.book_append_sheet(wb, ws, 'SQP环比异动追踪');
+            XLSX.writeFile(wb, `SQP_环比诊断对比_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        }
+
+        // Export Ads metrics list (Matches AdsPanel.tsx schema)
+        function exportAdsToExcel() {
+            if (adsRows.length === 0) return;
+            const wb = XLSX.utils.book_new();
+            const headers = [
+                '搜索推广词', '曝光量', '点击数', 'CTR (%)', '花费 ($)', '销售额 ($)', 'ACoS (%)', 
+                '订单数', '直接引流标签', '广告CVR (%)', '获客CPA ($)', '漏斗动作建议'
+            ];
+            const rows = adsRows.map(r => [
+                r.kw, r.im, r.cl, (r.ctr * 100).toFixed(2) + '%', r.sp.toFixed(2), r.ts.toFixed(2), 
+                (r.ac * 100).toFixed(1) + '%', r.to, r.attrTag, (r.cvr * 100).toFixed(2) + '%',
+                r.cpa.toFixed(2), r.diagText
+            ]);
+            const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+            XLSX.utils.book_append_sheet(wb, ws, 'Ads数据报告');
+            XLSX.writeFile(wb, `Ads_推广搜索词打标_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        }
+
+        // Export Cross matrices (Matches CrossPanel.tsx schema)
+        function exportCrossToExcel() {
+            if (crossRows.length === 0) return;
+            const wb = XLSX.utils.book_new();
+            const headers = [
+                '关键词', '大盘月搜词量', 'SQP自然点击数', '广告本词点击数', 'SQP自然ASIN订单', '广告本词订单数', 
+                'SQP自然市占购买比(%)', '广告订单贡献比 (%)', '广告花费投入比 (%)', 
+                '预算效益标签', '流量渠道类型划分', 'SQP自然CVR (%)', '广告转化率 CVR (%)', 
+                '大盘基准平均CVR (%)', '对碰转化率比值 (Ad/SQP)', '最终决策标签', '全套投放、调Bid出价、漏斗控制动作建议'
+            ];
+            const rows = crossRows.map(r => [
+                r.kw, r.qc, r.sqpClk, r.adsClk, r.sqpOrd, r.adsOrd, 
+                (r.sqpBuyShare * 150).toFixed(2), (r.adsOrderShare * 100).toFixed(2), (r.adSpendShare * 100).toFixed(2),
+                r.budTag, r.chanTag, (r.sqpCvr * 100).toFixed(2), (r.adsCvr * 100).toFixed(2),
+                (r.marketCvr * 100).toFixed(2), r.cvrRatio >= 100 ? '>99' : r.cvrRatio.toFixed(2),
+                r.tag, r.advice
+            ]);
+            const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+            XLSX.utils.book_append_sheet(wb, ws, 'SQP_vs_Ads交叉分析');
+            XLSX.writeFile(wb, `Amazon交叉融合分析矩阵_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        }
+
+        // --- Dynamic Sorter Core Engine ---
+        function handleSort(panel, key) {
+            if (panel === 'sqp') {
+                if (sqpSort.key === key) {
+                    sqpSort.dir = sqpSort.dir === 'asc' ? 'desc' : 'asc';
+                } else {
+                    sqpSort.key = key;
+                    sqpSort.dir = 'desc';
+                }
+                renderSqpTable();
+            } else if (panel === 'compare') {
+                if (compareSort.key === key) {
+                    compareSort.dir = compareSort.dir === 'asc' ? 'desc' : 'asc';
+                } else {
+                    compareSort.key = key;
+                    compareSort.dir = 'desc';
+                }
+                renderCompareTable();
+            } else if (panel === 'ads') {
+                if (adsSort.key === key) {
+                    adsSort.dir = adsSort.dir === 'asc' ? 'desc' : 'asc';
+                } else {
+                    adsSort.key = key;
+                    adsSort.dir = 'desc';
+                }
+                renderAdsTable();
+            } else if (panel === 'adsCompare') {
+                if (adsCompareSort.key === key) {
+                    adsCompareSort.dir = adsCompareSort.dir === 'asc' ? 'desc' : 'asc';
+                } else {
+                    adsCompareSort.key = key;
+                    adsCompareSort.dir = 'desc';
+                }
+                renderAdsCompareTable();
+            } else if (panel === 'cross') {
+                if (crossSort.key === key) {
+                    crossSort.dir = crossSort.dir === 'asc' ? 'desc' : 'asc';
+                } else {
+                    crossSort.key = key;
+                    crossSort.dir = 'desc';
+                }
+                renderCrossTable();
+            }
+        }
+
+        function getSortHeader(panel, key, label, alignment = 'right') {
+            let sortObj;
+            if (panel === 'sqp') sortObj = sqpSort;
+            else if (panel === 'compare') sortObj = compareSort;
+            else if (panel === 'ads') sortObj = adsSort;
+            else if (panel === 'adsCompare') sortObj = adsCompareSort;
+            else if (panel === 'cross') sortObj = crossSort;
+
+            const isCurrent = sortObj.key === key;
+            const arrow = isCurrent ? (sortObj.dir === 'asc' ? ' ▲' : ' ▼') : ' ↕';
+            const activeClass = isCurrent ? 'text-indigo-600 font-extrabold bg-indigo-50/40 rounded-t' : 'text-slate-500 hover:text-indigo-600';
+            
+            let alignClass = 'text-right';
+            if (alignment === 'left') alignClass = 'text-left';
+            if (alignment === 'center') alignClass = 'text-center';
+
+            return `<th class="p-3 ${alignClass} cursor-pointer transition-colors select-none font-bold uppercase whitespace-nowrap ${activeClass}" onclick="handleSort('${panel}', '${key}')" title="点击按此列进行智能排序">
+                <span class="inline-flex items-center gap-0.5 justify-end">
+                    ${label}<span class="text-[9px] opacity-75">${arrow}</span>
+                </span>
+            </th>`;
+        }
+
+        // --- Ads reference period (WoW) Uploader & Parser ---
+        function loadCompareAds(el) {
+            const file = el.files[0];
+            if (!file) return;
+            document.getElementById('ads-compare-file-label').textContent = file.name;
+            document.getElementById('ads-compare-status').innerHTML = '⏳ 正在解析环比时段 Ads CSV 广告流数据...';
+
+            Papa.parse(file, {
+                header: false,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    try {
+                        const rows = results.data;
+                        if (rows.length < 2) throw new Error('数据为空或格式不规范');
+                        let headerIdx = -1;
+                        for (let i = 0; i < Math.min(rows.length, 12); i++) {
+                            if (rows[i].some(c => String(c).includes('用户搜索词') || String(c).trim().toLowerCase() === 'customer search term')) {
+                                headerIdx = i;
+                                break;
+                            }
+                        }
+                        if (headerIdx === -1) {
+                            throw new Error('未识别到标准的广告列名称（如「用户搜索词」或「Customer Search Term」）');
+                        }
+
+                        const headers = rows[headerIdx].map(x => String(x || '').trim());
+                        
+                        const colMap = {
+                            kw: findColIndex(headers, ['用户搜索词', 'customer search term', 'search term']),
+                            fr: findColIndex(headers, ['词频', 'frequency']),
+                            im: findColIndex(headers, ['曝光量', 'impressions', '展现量']),
+                            cl: findColIndex(headers, ['点击', 'clicks', '点击量']),
+                            ct: findColIndex(headers, ['ctr', '点击率']),
+                            cp: findColIndex(headers, ['cpc', '点击成本']),
+                            sp: findColIndex(headers, ['花费', 'spend', '广告花费']),
+                            ts: findColIndex(headers, ['广告销售额', 'sales', '销售额']),
+                            to: findColIndex(headers, ['广告订单', 'orders', '订单量', '订单数']),
+                            ac: findColIndex(headers, ['acos', 'acos%']),
+                            cv: findColIndex(headers, ['cvr', '转化率', '广告cvr'])
+                        };
+
+                        if (colMap.kw === -1 || colMap.im === -1 || colMap.sp === -1) {
+                            throw new Error('缺少关键数据项！（必须包括：用户搜索词、曝光量、和花费）');
+                        }
+
+                        const list = [];
+                        let skippedTotals = 0;
+
+                        for (let i = headerIdx + 1; i < rows.length; i++) {
+                            const r = rows[i];
+                            if (!r || r.length <= Math.max(...Object.values(colMap))) continue;
+                            const kw = String(r[colMap.kw]).trim();
+                            if (!kw) continue;
+
+                            if (/总和|总计|合计|total|grand|summary|all/i.test(kw)) {
+                                skippedTotals++;
+                                continue;
+                            }
+
+                            list.push({
+                                kw: kw,
+                                fr: colMap.fr !== -1 ? cleanNum(r[colMap.fr]) : 0,
+                                im: cleanNum(r[colMap.im]),
+                                cl: cleanNum(r[colMap.cl]),
+                                ct: colMap.ct !== -1 ? cleanPct(r[colMap.ct]) : (cleanNum(r[colMap.cl]) / (cleanNum(r[colMap.im]) || 1)),
+                                cp: colMap.cp !== -1 ? cleanNum(r[colMap.cp]) : (cleanNum(r[colMap.sp]) / (cleanNum(r[colMap.cl]) || 1)),
+                                sp: cleanNum(r[colMap.sp]),
+                                ts: colMap.ts !== -1 ? cleanNum(r[colMap.ts]) : 0,
+                                ac: colMap.ac !== -1 ? cleanPct(r[colMap.ac]) : (cleanNum(r[colMap.sp]) / (cleanNum(r[colMap.ts]) || 1)),
+                                to: colMap.to !== -1 ? cleanNum(r[colMap.to]) : 0,
+                                cv: colMap.cv !== -1 ? cleanPct(r[colMap.cv]) : (cleanNum(r[colMap.to]) / (cleanNum(r[colMap.cl]) || 1))
+                            });
+                        }
+
+                        adsRawCompare = list;
+                        document.getElementById('ads-compare-status').innerHTML = `✅ <b>历史对比期广告报告载入完毕！</b>成功解析 ${list.length} 条对比词关系。`;
+                        processCompareAdsReports();
+
+                    } catch(err) {
+                        document.getElementById('ads-compare-status').innerHTML = `❌ <b>读取对比广告配置错误：</b> ${err.message}`;
+                    }
+                }
+            });
+        }
+
+        function processCompareAdsReports() {
+            if (adsRawList.length === 0 || adsRawCompare.length === 0) return;
+
+            const allKeys = new Set();
+            adsRawList.forEach(r => allKeys.add(r.kw.toLowerCase().trim()));
+            adsRawCompare.forEach(r => allKeys.add(r.kw.toLowerCase().trim()));
+
+            adsCompareRows = [];
+
+            allKeys.forEach(key => {
+                const cur = adsRawList.find(r => r.kw.toLowerCase().trim() === key) || {
+                    kw: key, im: 0, cl: 0, sp: 0, ts: 0, to: 0, ac: 0, cv: 0
+                };
+                const nxt = adsRawCompare.find(r => r.kw.toLowerCase().trim() === key) || {
+                    kw: key, im: 0, cl: 0, sp: 0, ts: 0, to: 0, ac: 0, cv: 0
+                };
+
+                const im_change = nxt.im === 0 ? (cur.im === 0 ? 0 : 1.0) : ((cur.im - nxt.im) / nxt.im);
+                const cl_change = nxt.cl === 0 ? (cur.cl === 0 ? 0 : 1.0) : ((cur.cl - nxt.cl) / nxt.cl);
+                const sp_change = nxt.sp === 0 ? (cur.sp === 0 ? 0 : 1.0) : ((cur.sp - nxt.sp) / nxt.sp);
+                const ts_change = nxt.ts === 0 ? (cur.ts === 0 ? 0 : 1.0) : ((cur.ts - nxt.ts) / nxt.ts);
+                const to_change = nxt.to === 0 ? (cur.to === 0 ? 0 : 1.0) : ((cur.to - nxt.to) / nxt.to);
+
+                const ac_change = cur.ac - nxt.ac;
+                const cv_change = cur.cv - nxt.cv;
+
+                const adviceStr = getAdsTrendInterpretation(cur, nxt);
+
+                adsCompareRows.push({
+                    kw: cur.kw || nxt.kw,
+                    im_current: cur.im,
+                    im_compare: nxt.im,
+                    im_change,
+                    cl_current: cur.cl,
+                    cl_compare: nxt.cl,
+                    cl_change,
+                    sp_current: cur.sp,
+                    sp_compare: nxt.sp,
+                    sp_change,
+                    ts_current: cur.ts,
+                    ts_compare: nxt.ts,
+                    ts_change,
+                    to_current: cur.to,
+                    to_compare: nxt.to,
+                    to_change,
+                    ac_current: cur.ac,
+                    ac_compare: nxt.ac,
+                    ac_change,
+                    cv_current: cur.cv,
+                    cv_compare: nxt.cv,
+                    cv_change,
+                    advice: adviceStr
+                });
+            });
+
+            // Set default sorting order
+            adsCompareRows.sort((a, b) => b.sp_change - a.sp_change);
+
+            document.getElementById('ads-compare-container').style.display = 'block';
+            renderAdsCompareTable();
+        }
+
+        function getAdsTrendInterpretation(cur, nxt) {
+            const parts = [];
+            const imVar = nxt.im > 0 ? (cur.im - nxt.im) / nxt.im : 0;
+            const spVar = nxt.sp > 0 ? (cur.sp - nxt.sp) / nxt.sp : 0;
+            const toVar = nxt.to > 0 ? (cur.to - nxt.to) / nxt.to : 0;
+            
+            if (spVar > 0.2 && toVar < -0.1) {
+                parts.push("⚠️ 花费逆向暴涨但出单滑落(异相蚕食)，建议强力压制 Bid 竞价或降低匹配宽度");
+            } else if (spVar > 0.15 && toVar > 0.15) {
+                parts.push("🚀 曝光与订单同步走强，处于良性扩张，建议微调增额卡位");
+            } else if (spVar < -0.2 && toVar < -0.2) {
+                parts.push("💸 消耗极速缩减拖累整体成交订单萎缩，需补充并重拾其曝光分发");
+            } else if (spVar < -0.15 && toVar >= 0) {
+                parts.push("☘️ 完美的投放微操！花费明显缩减但单量极其坚挺升华，转化大捷");
+            }
+
+            if (cur.ac > nxt.ac + 0.15 && cur.ac > 0) {
+                parts.push("💥 ACoS 本期暴涨 15% 以上，出现大量无效跑词，必须加否定排查或限制转化溢流");
+            } else if (cur.ac < nxt.ac - 0.08 && cur.ac > 0) {
+                parts.push("🎯 广告投入产出 ACoS 快速回暖，流量洗刷健康，值得巩固持仓出价");
+            }
+
+            if (cur.cv < nxt.cv - 0.03 && cur.cl > 12) {
+                parts.push("📉 广告点击转化率跌落超 3%，提防外部竞争对手价格战，需尽快配置 Coupon 抵扣抵消");
+            }
+
+            if (parts.length === 0) {
+                return "环比微量漂移，在常规调控阈值容错内，维持现状建议。";
+            }
+            return parts.join("；");
+        }
+
+        function renderAdsCompareTable() {
+            const table = document.getElementById('ads-compare-table');
+            const btnMore = document.getElementById('ads-compare-more-container');
+            if (!table) return;
+
+            let html = `<thead>
+                <tr class="bg-amber-500/10 border-b border-amber-200 text-[10px] text-amber-950 font-bold uppercase sticky top-0 bg-white z-10">
+                    ${getSortHeader('adsCompare', 'kw', '广告推广词', 'left')}
+                    ${getSortHeader('adsCompare', 'im_change', '曝光环比')}
+                    ${getSortHeader('adsCompare', 'cl_change', '点击环比')}
+                    ${getSortHeader('adsCompare', 'sp_change', '花费环比')}
+                    ${getSortHeader('adsCompare', 'to_change', '订单环比')}
+                    ${getSortHeader('adsCompare', 'ac_change', 'ACoS增量')}
+                    ${getSortHeader('adsCompare', 'cv_change', '转化CVR偏移')}
+                    <th class="p-3 text-left text-amber-950 font-bold uppercase min-w-[280px]">环比异相诊断与微操操作指引</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-amber-100 bg-white text-xs">`;
+
+            const displayed = adsCompareRows.slice(0, adsCompareLimit);
+
+            if (displayed.length === 0) {
+                html += `<tr><td colspan="8" class="p-8 text-center text-slate-400">请上传历史对比期 Ads 报告，拉起双时段诊断。</td></tr>`;
+            } else {
+                displayed.forEach(r => {
+                    const imPct = r.im_change >= 0 ? `+${(r.im_change*100).toFixed(1)}%` : `${(r.im_change*100).toFixed(1)}%`;
+                    const clPct = r.cl_change >= 0 ? `+${(r.cl_change*100).toFixed(1)}%` : `${(r.cl_change*100).toFixed(1)}%`;
+                    const spPct = r.sp_change >= 0 ? `+${(r.sp_change*100).toFixed(1)}%` : `${(r.sp_change*100).toFixed(1)}%`;
+                    const toPct = r.to_change >= 0 ? `+${(r.to_change*100).toFixed(1)}%` : `${(r.to_change*100).toFixed(1)}%`;
+                    const acPct = r.ac_change >= 0 ? `+${(r.ac_change*100).toFixed(1)}%` : `${(r.ac_change*100).toFixed(1)}%`;
+                    const cvPct = r.cv_change >= 0 ? `+${(r.cv_change*100).toFixed(1)}%` : `${(r.cv_change*100).toFixed(1)}%`;
+
+                    const spColor = r.sp_change > 0.15 ? 'text-rose-600 font-bold' : (r.sp_change < -0.15 ? 'text-emerald-600' : 'text-slate-600');
+                    const orderColor = r.to_change > 0.15 ? 'text-emerald-600 font-bold' : (r.to_change < -0.15 ? 'text-rose-600 font-bold' : 'text-slate-600');
+
+                    html += `<tr class="hover:bg-amber-500/5 transition-colors">
+                        <td class="p-3 font-semibold text-slate-900 text-left">${r.kw}</td>
+                        <td class="p-3 text-right font-mono text-slate-500 text-xs">${imPct} <span class="text-[9px] text-slate-400 block">${r.im_compare.toLocaleString()}➔${r.im_current.toLocaleString()}</span></td>
+                        <td class="p-3 text-right font-mono text-slate-500 text-xs">${clPct} <span class="text-[9px] text-slate-400 block">${r.cl_compare.toLocaleString()}➔${r.cl_current.toLocaleString()}</span></td>
+                        <td class="p-3 text-right font-mono ${spColor} text-xs">${spPct} <span class="text-[9px] text-slate-400 block">$${r.sp_compare.toFixed(1)}➔$${r.sp_current.toFixed(1)}</span></td>
+                        <td class="p-3 text-right font-mono ${orderColor} text-xs">${toPct} <span class="text-[9px] text-slate-400 block">${r.to_compare}➔${r.to_current}</span></td>
+                        <td class="p-3 text-right font-mono text-slate-600 text-xs">${acPct} <span class="text-[9px] text-slate-400 block">${(r.ac_compare*100).toFixed(1)}%➔${(r.ac_current*100).toFixed(1)}%</span></td>
+                        <td class="p-3 text-right font-mono text-slate-650 text-xs">${cvPct} <span class="text-[9px] text-slate-400 block">${(r.cv_compare*100).toFixed(1)}%➔${(r.cv_current*100).toFixed(1)}%</span></td>
+                        <td class="p-3 text-left max-w-[480px] min-w-[280px]">
+                            <span class="block truncate max-w-[480px] text-[11.5px] text-slate-600 hover:text-indigo-650 cursor-help" title="${r.advice}">${r.advice}</span>
+                        </td>
+                    </tr>`;
+                });
+            }
+
+            html += '</tbody>';
+            table.innerHTML = html;
+
+            if (adsCompareRows.length > adsCompareLimit) {
+                btnMore.style.display = 'block';
+            } else {
+                btnMore.style.display = 'none';
+            }
+            safeRenderIcons();
+        }
+
+        function loadMoreAdsCompare() {
+            adsCompareLimit += 100;
+            renderAdsCompareTable();
+        }
+
+        function exportAdsCompareToExcel() {
+            if (adsCompareRows.length === 0) return;
+            const wb = XLSX.utils.book_new();
+            const headers = [
+                '广告词', '本期曝光', '对比期曝光', '曝光变化', '本期点击', '对比期点击', '点击变化',
+                '本期花费', '对比期花费', '花费变化', '本期订单', '对比期订单', '订单变化',
+                '本期ACoS', '对比期ACoS', 'ACoS变化', '本期CVR', '对比期CVR', 'CVR变化', '操作指引建议'
+            ];
+            const rows = adsCompareRows.map(r => [
+                r.kw, r.im_current, r.im_compare, (r.im_change * 100).toFixed(2) + '%',
+                r.cl_current, r.cl_compare, (r.cl_change * 100).toFixed(2) + '%',
+                r.sp_current.toFixed(2), r.sp_compare.toFixed(2), (r.sp_change * 100).toFixed(2) + '%',
+                r.to_current, r.to_compare, (r.to_change * 100).toFixed(2) + '%',
+                (r.ac_current * 100).toFixed(1) + '%', (r.ac_compare * 100).toFixed(1) + '%', (r.ac_change * 100).toFixed(1) + '%',
+                (r.cv_current * 100).toFixed(2) + '%', (r.cv_compare * 100).toFixed(2) + '%', (r.cv_change * 100).toFixed(2) + '%',
+                r.advice
+            ]);
+            const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+            XLSX.utils.book_append_sheet(wb, ws, 'Ads双向环比诊断表');
+            XLSX.writeFile(wb, `Ads_双周期广告词诊断对照_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        }
+
+        // --- Mock Preset Dynamic Sandbox Data Loader ---
+        function loadPresetDemoData() {
+            // Sqp raw current period
+            sqpRawCurrent = [
+                { kw: "wireless charger", qc: 85400, asin: "B09XXSIMPL", imp: 12000, clk: 2500, ord: 340, mp: 24.99, ap: 21.99, tc: 52000, to: 4800 },
+                { kw: "magnetic power bank", qc: 42000, asin: "B09XXSIMPL", imp: 8500, clk: 1800, ord: 190, mp: 39.99, ap: 35.99, tc: 21000, to: 2400 },
+                { kw: "fast charger stand", qc: 31000, asin: "B09XXSIMPL", imp: 4500, clk: 720, ord: 125, mp: 19.99, ap: 22.99, tc: 14500, to: 1550 },
+                { kw: "iphone vertical stand", qc: 22000, asin: "B09XXSIMPL", imp: 1200, clk: 180, ord: 12, mp: 14.99, ap: 13.99, tc: 8900, to: 950 },
+                { kw: "magnetic charger 15w", qc: 15500, asin: "B09XXSIMPL", imp: 3100, clk: 620, ord: 110, mp: 28.50, ap: 29.99, tc: 7100, to: 820 },
+                { kw: "usb c docking station", qc: 68000, asin: "B09XXSIMPL", imp: 950, clk: 110, ord: 6, mp: 79.99, ap: 85.00, tc: 35000, to: 2100 },
+                { kw: "laptop stand aluminum", qc: 28400, asin: "B09XXSIMPL", imp: 400, clk: 30, ord: 2, mp: 32.00, ap: 35.00, tc: 11200, to: 1300 }
+            ];
+
+            // Sqp raw comparison period
+            sqpRawCompare = [
+                { kw: "wireless charger", qc: 78000, asin: "B09XXSIMPL", imp: 11500, clk: 2100, ord: 280, mp: 25.50, ap: 22.99, tc: 46000, to: 4400 },
+                { kw: "magnetic power bank", qc: 36000, asin: "B09XXSIMPL", imp: 7200, clk: 1400, ord: 130, mp: 41.00, ap: 36.99, tc: 18000, to: 1900 },
+                { kw: "fast charger stand", qc: 32500, asin: "B09XXSIMPL", imp: 5100, clk: 810, ord: 140, mp: 19.50, ap: 22.99, tc: 15000, to: 1620 },
+                { kw: "iphone vertical stand", qc: 24000, asin: "B09XXSIMPL", imp: 1400, clk: 210, ord: 25, mp: 13.99, ap: 13.99, tc: 9200, to: 1010 },
+                { kw: "magnetic charger 15w", qc: 18000, asin: "B09XXSIMPL", imp: 3500, clk: 780, ord: 145, mp: 28.00, ap: 29.99, tc: 8500, to: 910 },
+                { kw: "usb c docking station", qc: 74000, asin: "B09XXSIMPL", imp: 1200, clk: 160, ord: 14, mp: 78.00, ap: 85.00, tc: 39000, to: 2400 },
+                { kw: "laptop stand aluminum", qc: 29000, asin: "B09XXSIMPL", imp: 500, clk: 45, ord: 5, mp: 31.50, ap: 35.00, tc: 11500, to: 1350 }
+            ];
+
+            // Ads raw list
+            adsRawList = [
+                { kw: "wireless charger", fr: 1, im: 15000, cl: 1200, ct: 0.08, cp: 0.65, sp: 780, ts: 3120, ds: 2800, ac: 0.25, to: 120, do: 108, ca: 6.50, cv: 0.10 },
+                { kw: "magnetic power bank", fr: 1, im: 9500, cl: 850, ct: 0.089, cp: 0.82, sp: 697, ts: 2160, ds: 1800, ac: 0.322, to: 60, do: 48, ca: 11.6, cv: 0.07 },
+                { kw: "fast charger stand", fr: 1, im: 5200, cl: 410, ct: 0.078, cp: 0.45, sp: 184.5, ts: 1012, ds: 855, ac: 0.182, to: 46, do: 38, ca: 4.01, cv: 0.112 },
+                { kw: "iphone vertical stand", fr: 1, im: 2200, cl: 150, ct: 0.068, cp: 0.35, sp: 52.5, ts: 181.8, ds: 50, ac: 0.288, to: 13, do: 3, ca: 4.03, cv: 0.086 },
+                { kw: "magnetic charger 15w", fr: 1, im: 4100, cl: 350, ct: 0.085, cp: 0.70, sp: 245, ts: 1499, ds: 1300, ac: 0.163, to: 50, do: 45, ca: 4.90, cv: 0.142 }
+            ];
+
+            // Ads compare list
+            adsRawCompare = [
+                { kw: "wireless charger", fr: 1, im: 13000, cl: 1000, ct: 0.076, cp: 0.60, sp: 600, ts: 2400, ds: 2200, ac: 0.25, to: 100, do: 90, ca: 6.00, cv: 0.10 },
+                { kw: "magnetic power bank", fr: 1, im: 8000, cl: 700, ct: 0.0875, cp: 0.75, sp: 525, ts: 1500, ds: 1200, ac: 0.35, to: 50, do: 40, ca: 10.5, cv: 0.071 },
+                { kw: "fast charger stand", fr: 1, im: 5500, cl: 450, ct: 0.0818, cp: 0.45, sp: 202.5, ts: 1210, ds: 1000, ac: 0.167, to: 55, do: 48, ca: 3.68, cv: 0.122 },
+                { kw: "iphone vertical stand", fr: 1, im: 2400, cl: 180, ct: 0.075, cp: 0.38, sp: 68.4, ts: 260, ds: 100, ac: 0.263, to: 18, do: 5, ca: 3.80, cv: 0.10 },
+                { kw: "magnetic charger 15w", fr: 1, im: 4500, cl: 380, ct: 0.0844, cp: 0.72, sp: 273.6, ts: 1790, ds: 1500, ac: 0.153, to: 60, do: 54, ca: 4.56, cv: 0.157 }
+            ];
+
+            document.getElementById('sqp-file-label').textContent = 'demo_sqp_current.csv';
+            document.getElementById('sqp-compare-file-label').textContent = 'demo_sqp_compare.csv';
+            document.getElementById('ads-file-label').textContent = 'demo_ads_current.csv';
+            document.getElementById('ads-compare-file-label').textContent = 'demo_ads_compare.csv';
+
+            document.getElementById('sqp-status').innerHTML = '✅ <b>演示主周期 SQP 数据装载完毕！</b>';
+            document.getElementById('sqp-compare-status').innerHTML = '✅ <b>演示对比周期 SQP 数据评估就绪！</b>';
+            document.getElementById('ads-status').innerHTML = '✅ <b>演示主力 Ads 推广词数据装载完毕！</b>';
+            document.getElementById('ads-compare-status').innerHTML = '✅ <b>演示历史时段 Ads 环比参考就绪！</b>';
+
+            // Make tables visible
+            document.getElementById('sqp-table-container').style.display = 'block';
+            document.getElementById('sqp-compare-container').style.display = 'block';
+            document.getElementById('ads-table-container').style.display = 'block';
+            document.getElementById('ads-compare-container').style.display = 'block';
+
+            // Fire computation chains
+            processSqpReport();
+            processSqpCompare();
+            processAdsReports();
+            processCompareAdsReports();
+            buildCrossMatrix();
+
+            switchTab('sqp');
+        }
+
+        // Initialize Lucide icons on window loaded
+        window.addEventListener('load', function() {
+            safeRenderIcons();
+        });
+    </script>
+</body>
+</html>

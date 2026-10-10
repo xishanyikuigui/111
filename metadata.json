@@ -1,0 +1,8 @@
+{
+  "name": "亚马逊数据分析工作台-v1.3",
+  "description": "An interactive data workbench for Amazon operations. Seamlessly merges Search Query Performance (SQP) reports and advertisement search term reports to diagnose search funnels, calculate period-over-period performance, auto-tag listings, and export strategic reports.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
