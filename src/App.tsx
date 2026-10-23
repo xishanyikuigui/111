@@ -7,7 +7,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { 
   BarChart3, Megaphone, GitCompare, FileText, 
-  Sparkles, ShieldCheck, TrendingUp, Cpu
+  Sparkles, ShieldCheck, TrendingUp, Cpu, PackageCheck
 } from 'lucide-react';
 import { SQPRow, CompareRow, AdsRow, CrossRow, AdsCompareRow } from './types';
 import SqpPanel from './components/SqpPanel';
@@ -15,6 +15,7 @@ import AdsPanel from './components/AdsPanel';
 import CrossPanel from './components/CrossPanel';
 import AiPanel from './components/AiPanel';
 import DocsPanel from './components/DocsPanel';
+import ReorderPanel from './components/ReorderPanel';
 
 export default function App() {
   const [isLocked, setIsLocked] = useState(false);
@@ -116,7 +117,7 @@ export default function App() {
     };
   }, []);
 
-  const [activeTab, setActiveTab ] = useState<'sqp' | 'ads' | 'cross' | 'ai' | 'docs'>('sqp');
+  const [activeTab, setActiveTab ] = useState<'sqp' | 'ads' | 'cross' | 'ai' | 'reorder' | 'docs'>('sqp');
 
   // Shared master datasets
   const [sqpRows, setSqpRows] = useState<SQPRow[]>([]);
@@ -138,6 +139,7 @@ export default function App() {
     { id: 'ads', label: '📢 广告词漏斗 (Ads推款)', count: adsRows.length, icon: Megaphone },
     { id: 'cross', label: '↕ 交叉融合矩阵 (Cross策略)', count: crossRows.length, icon: GitCompare },
     { id: 'ai', label: '🤖 AI 智能分析助理', count: 0, icon: Sparkles },
+    { id: 'reorder', label: '📦 新品返单决策', count: 0, icon: PackageCheck },
     { id: 'docs', label: '📖 说明与自动打标逻辑', count: 0, icon: FileText },
   ] as const;
 
@@ -325,6 +327,10 @@ export default function App() {
               adsRows={adsRows}
               onNavigateToAds={() => setActiveTab('ads')}
             />
+          </div>
+
+          <div className={activeTab === 'reorder' ? 'block' : 'hidden'}>
+            <ReorderPanel />
           </div>
 
           <div className={activeTab === 'docs' ? 'block' : 'hidden'}>
