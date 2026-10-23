@@ -330,7 +330,7 @@ export default function App() {
           </div>
 
           <div className={activeTab === 'reorder' ? 'block' : 'hidden'}>
-              <ReorderPanel sqpRows={sqpRows} />
+              <ReorderPanel sqpRows={sqpRows} adsRows={adsRows} />
           </div>
 
           <div className={activeTab === 'docs' ? 'block' : 'hidden'}>
