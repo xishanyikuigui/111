@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import { AlertTriangle, BarChart3, CircleDollarSign, Download, Info, PackageCheck, SearchCheck, TrendingUp } from 'lucide-react';
 import { AdsRow, SQPRow } from '../types';
 
-type Props = { sqpRows: SQPRow[]; adsRows: AdsRow[] };
+type Props = { sqpRows: SQPRow[]; adsRows: AdsRow[]; sqpSourceSheet: XLSX.WorkSheet | null; adsSourceSheet: XLSX.WorkSheet | null };
 type InputValue = number | '';
 type Inputs = {
   profitRate30: InputValue; returnRate: InputValue; rating: InputValue; conversionRate30: InputValue; acoas: InputValue; acos: InputValue;
@@ -26,7 +26,7 @@ const initialInputs: Inputs = {
 const pct = (value: number) => (value * 100).toFixed(1) + '%';
 const qty = (value: number | null) => value === null ? '—' : new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 0 }).format(Math.max(0, value));
 
-export default function ReorderPanel({ sqpRows, adsRows }: Props) {
+export default function ReorderPanel({ sqpRows, adsRows, sqpSourceSheet, adsSourceSheet }: Props) {
   const [inputs, setInputs] = useState<Inputs>(initialInputs);
   const [listingMonth, setListingMonth] = useState('');
   const [showFormula, setShowFormula] = useState(false);
@@ -95,36 +95,95 @@ export default function ReorderPanel({ sqpRows, adsRows }: Props) {
     .sort((a, b) => b.aos - a.aos)
     .slice(0, 10)
     .map((row) => ({ ...row, marketCvr: sqpCvrByKeyword.get(row.kw.trim().toLowerCase()) ?? null })), [adsRows, sqpCvrByKeyword]);
-  const exportReady = model.orderQty !== null && sqpRows.length > 0 && adsRows.length > 0;
+  const exportReady = model.orderQty !== null && sqpRows.length > 0 && adsRows.length > 0 && sqpSourceSheet !== null && adsSourceSheet !== null;
   const downloadWorkbook = () => {
     if (!exportReady) return;
+    const monthModels = [model.month1, model.month2, model.month3, model.month4, model.month5];
+    const values = (keys: (keyof Inputs)[]) => keys.map((key) => inputs[key] === '' ? '' : Number(inputs[key]));
     const decisionRows: (string | number)[][] = [
-      ['新品返单决策导出'],
-      ['产品上架月份', listingMonth || '未填写'],
+      ['新品返单决策报告'],
+      ['导出时间', new Date().toLocaleString('zh-CN'), '产品上架月份', listingMonth || '未填写'],
       [],
-      ['月份', ...monthLabels],
-      ['预计销量', model.month1.sales ?? '', model.month2.sales ?? '', model.month3.sales ?? '', model.month4.sales ?? '', model.month5.sales ?? ''],
-      ['广告点击', model.month1.clicks ?? '', model.month2.clicks ?? '', model.month3.clicks ?? '', model.month4.clicks ?? '', model.month5.clicks ?? ''],
+      ['近30天产品经营指标'],
+      ['指标', '数值', '指标', '数值'],
+      ['近30天利润率', inputs.profitRate30 === '' ? '' : Number(inputs.profitRate30) / 100, '退货率', inputs.returnRate === '' ? '' : Number(inputs.returnRate) / 100],
+      ['产品评分', inputs.rating === '' ? '' : Number(inputs.rating), '近30天转化率', inputs.conversionRate30 === '' ? '' : Number(inputs.conversionRate30) / 100],
+      ['ACoAS', inputs.acoas === '' ? '' : Number(inputs.acoas) / 100, 'ACOS', inputs.acos === '' ? '' : Number(inputs.acos) / 100],
       [],
-      ['安全库存', Number(inputs.safetyStock)],
-      ['首批下单量', Number(inputs.initialOrderQty)],
-      ['五个月销量合计', model.salesTotal ?? ''],
+      ['广告反推销量明细'],
+      ['项目', ...monthLabels],
+      ['广告预算（$）', ...values(['m1Budget', 'm2Budget', 'm3Budget', 'm4Budget', 'm5Budget'])],
+      ['CPC（$）', ...values(['m1Cpc', 'm2Cpc', 'm3Cpc', 'm4Cpc', 'm5Cpc'])],
+      ['广告转化率', ...values(['m1AdCvr', 'm2AdCvr', 'm3AdCvr', 'm4AdCvr', 'm5AdCvr']).map((value) => value === '' ? '' : Number(value) / 100)],
+      ['广告订单占比', ...values(['m1AdOrderShare', 'm2AdOrderShare', 'm3AdOrderShare', 'm4AdOrderShare', 'm5AdOrderShare']).map((value) => value === '' ? '' : Number(value) / 100)],
+      ['广告点击（自动计算）', ...monthModels.map((month) => month.clicks ?? '')],
+      ['预计销量（自动计算）', ...monthModels.map((month) => month.sales ?? '')],
+      ['销量计算逻辑', '广告预算 ÷ CPC × 广告转化率 ÷ 广告订单占比'],
+      [],
+      ['返单结论'],
+      ['结论', decision],
+      ['最近五个月销量', model.salesTotal ?? ''],
+      ['安全库存', inputs.safetyStock === '' ? '' : Number(inputs.safetyStock)],
+      ['首批下单量', inputs.initialOrderQty === '' ? '' : Number(inputs.initialOrderQty)],
       ['覆盖目标库存', model.targetStock ?? ''],
       ['建议下单量', model.orderQty ?? ''],
-      ['计算公式', '第一月销量 + 第二月销量 + 第三月销量 + 第四月销量 + 第五月销量 + 安全库存 − 首批下单量'],
+      ['返单公式', '最近五个月销量 + 安全库存 − 首批下单量'],
+      [],
+      ['搜索绩效核心关键词 Top 10'],
+      ['核心关键词', '本品 CVR', '大盘 CVR', '出单占比', 'Ci / 流量力', 'Bi / 承接力', '判断'],
+      ...coreKeywords.map((row) => [row.kw, row.asinCVR, row.marketCVR, row.buyShare, row.clickImpRatio, row.buyClickRatio, row.asinCVR >= row.marketCVR && row.clickImpRatio > 1 && row.buyClickRatio > 1 ? '漏斗更精准' : '待优化']),
       [],
       ['广告关键词 Top 10（按出单占比）'],
-      ['关键词', '关键词订单数量', '关键词订单占比', '关键词广告转化率', '关键词大盘转化率'],
+      ['广告关键词', '关键词订单数量', '关键词订单占比', '关键词广告转化率', '关键词大盘转化率'],
       ...topAdsKeywords.map((row) => [row.kw, row.to, row.aos, row.cv, row.marketCvr ?? '']),
+      [],
+      ['数据源说明', 'Sheet2 与 Sheet3 为用户上传文件的原始首个工作表，未参与清洗、计算或改写。'],
     ];
     const workbook = XLSX.utils.book_new();
     const decisionSheet = XLSX.utils.aoa_to_sheet(decisionRows);
-    decisionSheet['!cols'] = [{ wch: 30 }, ...Array.from({ length: 5 }, () => ({ wch: 18 }))];
-    const sqpSheet = XLSX.utils.json_to_sheet(sqpRows);
-    const adsSheet = XLSX.utils.json_to_sheet(adsRows);
+    const rowOf = (label: string) => decisionRows.findIndex((row) => row[0] === label) + 1;
+    const healthTitleRow = rowOf('近30天产品经营指标');
+    const adDetailTitleRow = rowOf('广告反推销量明细');
+    const conclusionTitleRow = rowOf('返单结论');
+    const coreTitleRow = rowOf('搜索绩效核心关键词 Top 10');
+    const adsTitleRow = rowOf('广告关键词 Top 10（按出单占比）');
+    const sourceRow = rowOf('数据源说明');
+    decisionSheet['!cols'] = [{ wch: 30 }, { wch: 22 }, { wch: 20 }, { wch: 20 }, { wch: 18 }, { wch: 18 }, { wch: 18 }];
+    decisionSheet['!rows'] = Array.from({ length: decisionRows.length }, () => ({ hpt: 21 }));
+    decisionSheet['!merges'] = [
+      XLSX.utils.decode_range('A1:F1'), XLSX.utils.decode_range(`A${healthTitleRow}:F${healthTitleRow}`), XLSX.utils.decode_range(`A${adDetailTitleRow}:F${adDetailTitleRow}`),
+      XLSX.utils.decode_range(`A${conclusionTitleRow}:F${conclusionTitleRow}`), XLSX.utils.decode_range(`A${coreTitleRow}:G${coreTitleRow}`), XLSX.utils.decode_range(`A${adsTitleRow}:E${adsTitleRow}`),
+      XLSX.utils.decode_range(`B${adDetailTitleRow + 8}:F${adDetailTitleRow + 8}`), XLSX.utils.decode_range(`B${conclusionTitleRow + 7}:F${conclusionTitleRow + 7}`), XLSX.utils.decode_range(`B${sourceRow}:G${sourceRow}`),
+    ];
+    const setStyle = (range: string, style: any) => {
+      const decoded = XLSX.utils.decode_range(range);
+      for (let row = decoded.s.r; row <= decoded.e.r; row += 1) for (let col = decoded.s.c; col <= decoded.e.c; col += 1) {
+        const address = XLSX.utils.encode_cell({ r: row, c: col });
+        if (decisionSheet[address]) decisionSheet[address].s = style;
+      }
+    };
+    const titleStyle = { fill: { fgColor: { rgb: '1E3A5F' } }, font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 16 }, alignment: { horizontal: 'center', vertical: 'center' } };
+    const sectionStyle = { fill: { fgColor: { rgb: 'DCEAF7' } }, font: { bold: true, color: { rgb: '17365D' } }, alignment: { vertical: 'center' } };
+    const headerStyle = { fill: { fgColor: { rgb: '4472C4' } }, font: { bold: true, color: { rgb: 'FFFFFF' } }, alignment: { horizontal: 'center', vertical: 'center' }, border: { bottom: { style: 'thin', color: { rgb: 'FFFFFF' } } } };
+    const bodyStyle = { border: { bottom: { style: 'thin', color: { rgb: 'D9E2F3' } } }, alignment: { vertical: 'center' } };
+    setStyle('A1:F1', titleStyle);
+    [`A${healthTitleRow}:F${healthTitleRow}`, `A${adDetailTitleRow}:F${adDetailTitleRow}`, `A${conclusionTitleRow}:F${conclusionTitleRow}`, `A${coreTitleRow}:G${coreTitleRow}`, `A${adsTitleRow}:E${adsTitleRow}`].forEach((range) => setStyle(range, sectionStyle));
+    [`A${healthTitleRow + 1}:D${healthTitleRow + 1}`, `A${adDetailTitleRow + 1}:F${adDetailTitleRow + 1}`, `A${coreTitleRow + 1}:G${coreTitleRow + 1}`, `A${adsTitleRow + 1}:E${adsTitleRow + 1}`].forEach((range) => setStyle(range, headerStyle));
+    setStyle(`A${healthTitleRow + 2}:D${healthTitleRow + 4}`, bodyStyle); setStyle(`A${adDetailTitleRow + 2}:F${adDetailTitleRow + 8}`, bodyStyle); setStyle(`A${conclusionTitleRow + 1}:B${conclusionTitleRow + 7}`, bodyStyle);
+    if (coreKeywords.length) setStyle(`A${coreTitleRow + 2}:G${coreTitleRow + 1 + coreKeywords.length}`, bodyStyle);
+    if (topAdsKeywords.length) setStyle(`A${adsTitleRow + 2}:E${adsTitleRow + 1 + topAdsKeywords.length}`, bodyStyle);
+    const percentRanges = ['B6', 'D6', 'D7', 'B8', 'D8', `B${adDetailTitleRow + 4}:F${adDetailTitleRow + 5}`];
+    if (coreKeywords.length) percentRanges.push(`B${coreTitleRow + 2}:C${coreTitleRow + 1 + coreKeywords.length}`, `D${coreTitleRow + 2}:D${coreTitleRow + 1 + coreKeywords.length}`);
+    if (topAdsKeywords.length) percentRanges.push(`C${adsTitleRow + 2}:E${adsTitleRow + 1 + topAdsKeywords.length}`);
+    percentRanges.forEach((range) => {
+      const decoded = XLSX.utils.decode_range(range);
+      for (let row = decoded.s.r; row <= decoded.e.r; row += 1) for (let col = decoded.s.c; col <= decoded.e.c; col += 1) {
+        const cell = decisionSheet[XLSX.utils.encode_cell({ r: row, c: col })]; if (cell) cell.z = '0.0%';
+      }
+    });
     XLSX.utils.book_append_sheet(workbook, decisionSheet, '返单决策');
-    XLSX.utils.book_append_sheet(workbook, sqpSheet, '搜索绩效数据源');
-    XLSX.utils.book_append_sheet(workbook, adsSheet, '广告搜索词报告数据源');
+    XLSX.utils.book_append_sheet(workbook, sqpSourceSheet!, '搜索绩效数据源');
+    XLSX.utils.book_append_sheet(workbook, adsSourceSheet!, '广告搜索词报告数据源');
     XLSX.writeFile(workbook, '新品返单决策.xlsx');
   };
   return <div className="space-y-6">

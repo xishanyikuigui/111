@@ -226,6 +226,7 @@ const CustomTrendTooltip = ({ active, payload, label, dimension }: any) => {
 interface SqpPanelProps {
   sqpRows: SQPRow[];
   setSqpRows: (rows: SQPRow[]) => void;
+  setSourceSheet: (sheet: XLSX.WorkSheet) => void;
   compareRows: CompareRow[];
   setCompareRows: (rows: CompareRow[]) => void;
   firstColWidth: number;
@@ -236,6 +237,7 @@ interface SqpPanelProps {
 export default function SqpPanel({
   sqpRows,
   setSqpRows,
+  setSourceSheet,
   compareRows,
   setCompareRows,
   firstColWidth,
@@ -1313,7 +1315,7 @@ export default function SqpPanel({
 
   const parseFileToRows = (
     file: File,
-    callback: (rows: string[][]) => void,
+    callback: (rows: string[][], sourceSheet: XLSX.WorkSheet) => void,
     errorCallback: (err: any) => void
   ) => {
     const name = file.name.toLowerCase();
@@ -1330,7 +1332,7 @@ export default function SqpPanel({
             if (!Array.isArray(r)) return [];
             return r.map((cell) => (cell !== undefined && cell !== null ? String(cell) : ''));
           });
-          callback(stringRows);
+          callback(stringRows, worksheet);
         } catch (err) {
           errorCallback(err);
         }
@@ -1345,7 +1347,7 @@ export default function SqpPanel({
         skipEmptyLines: true,
         complete: (results) => {
           const rows = results.data as string[][];
-          callback(rows);
+          callback(rows, XLSX.utils.aoa_to_sheet(rows));
         },
         error: (err) => {
           errorCallback(err);
@@ -1361,7 +1363,7 @@ export default function SqpPanel({
 
     parseFileToRows(
       file,
-      (rows) => {
+      (rows, sourceSheet) => {
         try {
           if (rows.length < 2) throw new Error('数据空或行数不足');
           let headerIdx = -1;
@@ -1472,6 +1474,7 @@ export default function SqpPanel({
             statusSetter(`✅ 载入环比数据：解析出 ${validRows.length}行 购买反馈（${asinSet.size}个ASIN）`);
           } else {
             setSqpRawCache(validRows);
+            setSourceSheet(sourceSheet);
             fileSetter(file);
             statusSetter(`✅ 载入当前数据：解析出 ${validRows.length}行 购买反馈（${asinSet.size}个ASIN）`);
           }

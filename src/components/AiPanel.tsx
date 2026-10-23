@@ -20,6 +20,8 @@ export default function AiPanel({ adsRows, onNavigateToAds }: AiPanelProps) {
   const [report, setReport] = useState<string>('');
   const [sampledUsed, setSampledUsed] = useState<boolean>(false);
   const [metrics, setMetrics] = useState<any>(null);
+  const [deepSeekApiKey, setDeepSeekApiKey] = useState('');
+  const [deepSeekModel, setDeepSeekModel] = useState('deepseek-chat');
 
   // Ready-to-go quick prompts
   const PRESETS = [
@@ -129,30 +131,46 @@ export default function AiPanel({ adsRows, onNavigateToAds }: AiPanelProps) {
     setErrorMsg('');
     setCopied(false);
     
-    const requestText = promptOverride || customRequest;
+    const requestText = promptOverride || customRequest || '请对当前广告搜索词报告进行全面诊断，并按优先级给出可执行的否定词、调价、预算与拓词建议。';
 
     try {
-      const response = await fetch('/api/ai/analyze', {
+      if (!deepSeekApiKey.trim()) throw new Error('请先填写个人 DeepSeek API Key。密钥仅保留在当前页面内存中，刷新页面后会清除。');
+      if (adsRows.length === 0) throw new Error('请先上传广告搜索词报告，再调用 DeepSeek 生成真实诊断。');
+      const totalSpend = adsRows.reduce((sum, row) => sum + row.sp, 0);
+      const totalSales = adsRows.reduce((sum, row) => sum + row.ts, 0);
+      const totalClicks = adsRows.reduce((sum, row) => sum + row.cl, 0);
+      const totalOrders = adsRows.reduce((sum, row) => sum + row.to, 0);
+      const reportRows = adsRows.slice(0, 150).map((row) => ({
+        keyword: row.kw, impressions: row.im, clicks: row.cl, spend: row.sp, sales: row.ts,
+        orders: row.to, cpc: row.cp, acos: row.ac, cvr: row.cv,
+      }));
+      const response = await fetch('https://api.deepseek.com/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${deepSeekApiKey.trim()}` },
         body: JSON.stringify({
-          adsRows,
-          customRequest: requestText
+          model: deepSeekModel.trim() || 'deepseek-chat',
+          temperature: 0.2,
+          max_tokens: 2600,
+          messages: [
+            { role: 'system', content: '你是资深亚马逊 SP 广告分析师。只根据提供的报表数据分析，不虚构数据。用中文输出：一、总体漏斗；二、优先处理的浪费词；三、可放量词；四、预算和竞价动作；五、数据限制。数值要可追溯到关键词。' },
+            { role: 'user', content: `运营目标：${requestText}\n\n汇总：花费 $${totalSpend.toFixed(2)}；销售额 $${totalSales.toFixed(2)}；点击 ${totalClicks}；订单 ${totalOrders}。\n\n广告搜索词明细（最多150行）：\n${JSON.stringify(reportRows)}` },
+          ],
         })
       });
-
       const data = await response.json();
-      
-      if (!data.success) {
-        throw new Error(data.message || "未知分析错误");
-      }
-
-      setReport(data.report);
-      setSampledUsed(data.sampledUsed);
-      setMetrics(data.summary);
+      if (!response.ok) throw new Error(data?.error?.message || `DeepSeek 请求失败（${response.status}）`);
+      const content = data?.choices?.[0]?.message?.content;
+      if (!content) throw new Error('DeepSeek 未返回可用报告内容。');
+      setReport(content);
+      setSampledUsed(false);
+      setMetrics({
+        totalSpend, totalSales, totalOrders,
+        overallACoS: totalSales > 0 ? ((totalSpend / totalSales) * 100).toFixed(2) : '—',
+        overallCVR: totalClicks > 0 ? ((totalOrders / totalClicks) * 100).toFixed(2) : '—',
+      });
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.message || "连接全栈端AI助理失败，请确保后台服务启动且 GEMINI_API_KEY 已配置。");
+      setErrorMsg(err.message || '连接 DeepSeek API 失败，请检查 API Key、网络和模型名称。');
     } finally {
       setLoading(false);
     }
@@ -310,6 +328,18 @@ export default function AiPanel({ adsRows, onNavigateToAds }: AiPanelProps) {
         <div className="lg:col-span-5 space-y-6">
           
           <div className="bg-white rounded-xl border border-slate-200 shadow-3xs p-6 space-y-5">
+            <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4 space-y-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">个人 DeepSeek API</h3>
+                <p className="mt-1 text-[11px] leading-relaxed text-slate-600">API Key 只保留在本次页面内存，刷新即清除；调用时由浏览器直接发送至 DeepSeek，不会写入 GitHub 或本地存储。</p>
+              </div>
+              <label className="block text-[11px] font-bold text-slate-600">DeepSeek API Key
+                <input type="password" autoComplete="off" value={deepSeekApiKey} onChange={(event) => setDeepSeekApiKey(event.target.value)} placeholder="sk-..." className="mt-1.5 w-full rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-normal text-slate-800 outline-none focus:border-indigo-500" />
+              </label>
+              <label className="block text-[11px] font-bold text-slate-600">模型名称
+                <input value={deepSeekModel} onChange={(event) => setDeepSeekModel(event.target.value)} placeholder="deepseek-chat" className="mt-1.5 w-full rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-normal text-slate-800 outline-none focus:border-indigo-500" />
+              </label>
+            </div>
             <div>
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
                 <Brain className="w-4 h-4 text-indigo-500" />
@@ -478,11 +508,7 @@ export default function AiPanel({ adsRows, onNavigateToAds }: AiPanelProps) {
                       <p className="text-rose-700 leading-normal">
                         {errorMsg}
                       </p>
-                      <div className="pt-2 text-[10px] text-slate-500 flex flex-col gap-1">
-                        <span>• 系统目前已同时支持 Google Gemini、OpenAI GPT 与中国尖端 DeepSeek 多通道大模型。</span>
-                        <span>• 请在当前 AI Studio 的右上角 **{'Settings > Secrets'}** 面板配置 `GEMINI_API_KEY`、`DEEPSEEK_API_KEY` 或 `OPENAI_API_KEY` 即可完成正式激活！</span>
-                        <span>• 您也可以在下方直接启动本地免密模拟诊断，提前体验 AI 分析工作台的多维漏斗排查深度。</span>
-                      </div>
+                      <p className="pt-2 text-[10px] text-slate-500">请确认 Key 有效、模型名称正确，并允许浏览器访问 DeepSeek API；仍可使用下方演示模式查看界面。</p>
                     </div>
                   </div>
                   <div className="pt-2 pl-6">
@@ -526,7 +552,7 @@ export default function AiPanel({ adsRows, onNavigateToAds }: AiPanelProps) {
 
               {report && !loading && (
                 <div className="mt-8 pt-4 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-                  <span>诊断执行中枢: Gemini AI Engine</span>
+                  <span>诊断执行中枢: DeepSeek API</span>
                   <span>分析完成时间: {new Date().toLocaleTimeString()}</span>
                 </div>
               )}

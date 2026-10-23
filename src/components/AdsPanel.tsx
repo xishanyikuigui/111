@@ -19,6 +19,7 @@ import { cleanNum, cleanPct, getAdsDiag, getAdsTrendInterpretation, getDynamicTh
 interface AdsPanelProps {
   adsRows: AdsRow[];
   setAdsRows: (rows: AdsRow[]) => void;
+  setSourceSheet: (sheet: XLSX.WorkSheet) => void;
   adsCompareRows: AdsCompareRow[];
   setAdsCompareRows: (rows: AdsCompareRow[]) => void;
   compareAdsFile: File | null;
@@ -35,6 +36,7 @@ interface AdsPanelProps {
 export default function AdsPanel({
   adsRows,
   setAdsRows,
+  setSourceSheet,
   adsCompareRows,
   setAdsCompareRows,
   compareAdsFile,
@@ -158,7 +160,7 @@ export default function AdsPanel({
 
   const parseFileToRows = (
     file: File,
-    callback: (rows: string[][]) => void,
+    callback: (rows: string[][], sourceSheet: XLSX.WorkSheet) => void,
     errorCallback: (err: any) => void
   ) => {
     const name = file.name.toLowerCase();
@@ -175,7 +177,7 @@ export default function AdsPanel({
             if (!Array.isArray(r)) return [];
             return r.map((cell) => (cell !== undefined && cell !== null ? String(cell) : ''));
           });
-          callback(stringRows);
+          callback(stringRows, worksheet);
         } catch (err) {
           errorCallback(err);
         }
@@ -190,7 +192,7 @@ export default function AdsPanel({
         skipEmptyLines: true,
         complete: (results) => {
           const rows = results.data as string[][];
-          callback(rows);
+          callback(rows, XLSX.utils.aoa_to_sheet(rows));
         },
         error: (err) => {
           errorCallback(err);
@@ -203,7 +205,7 @@ export default function AdsPanel({
     setStatusMsg('⏳ 正在解析广告报告...');
     parseFileToRows(
       file,
-      (rows) => {
+      (rows, sourceSheet) => {
         try {
           if (rows.length < 2) throw new Error('数据为空或格式不匹配');
           let headerIdx = -1;
@@ -407,6 +409,7 @@ export default function AdsPanel({
           }
 
           rawDataRef.current = parsedList;
+          setSourceSheet(sourceSheet);
           setAdsFile(file);
           setStatusMsg(
             `✅ 成功载入数据：解析出 ${parsedList.length} 个广告推广搜索词（已跳过 ${skippedTotals}行 汇总数据关系）`

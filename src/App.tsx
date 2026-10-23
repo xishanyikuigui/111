@@ -10,6 +10,7 @@ import {
   Sparkles, ShieldCheck, TrendingUp, Cpu, PackageCheck
 } from 'lucide-react';
 import { SQPRow, CompareRow, AdsRow, CrossRow, AdsCompareRow } from './types';
+import * as XLSX from 'xlsx';
 import SqpPanel from './components/SqpPanel';
 import AdsPanel from './components/AdsPanel';
 import CrossPanel from './components/CrossPanel';
@@ -123,6 +124,9 @@ export default function App() {
   const [sqpRows, setSqpRows] = useState<SQPRow[]>([]);
   const [compareRows, setCompareRows] = useState<CompareRow[]>([]);
   const [adsRows, setAdsRows] = useState<AdsRow[]>([]);
+  // 保留用户上传报表的原始工作表，仅用于返单 Excel 的数据源页导出。
+  const [sqpSourceSheet, setSqpSourceSheet] = useState<XLSX.WorkSheet | null>(null);
+  const [adsSourceSheet, setAdsSourceSheet] = useState<XLSX.WorkSheet | null>(null);
   const [crossRows, setCrossRows] = useState<CrossRow[]>([]);
 
   // Lifted stable states for Ads WoW Comparison Features
@@ -278,6 +282,7 @@ export default function App() {
             <SqpPanel
               sqpRows={sqpRows}
               setSqpRows={setSqpRows}
+              setSourceSheet={setSqpSourceSheet}
               compareRows={compareRows}
               setCompareRows={setCompareRows}
               firstColWidth={firstColWidth}
@@ -293,6 +298,7 @@ export default function App() {
             <AdsPanel
               adsRows={adsRows}
               setAdsRows={setAdsRows}
+              setSourceSheet={setAdsSourceSheet}
               adsCompareRows={adsCompareRows}
               setAdsCompareRows={setAdsCompareRows}
               compareAdsFile={compareAdsFile}
@@ -330,7 +336,7 @@ export default function App() {
           </div>
 
           <div className={activeTab === 'reorder' ? 'block' : 'hidden'}>
-              <ReorderPanel sqpRows={sqpRows} adsRows={adsRows} />
+              <ReorderPanel sqpRows={sqpRows} adsRows={adsRows} sqpSourceSheet={sqpSourceSheet} adsSourceSheet={adsSourceSheet} />
           </div>
 
           <div className={activeTab === 'docs' ? 'block' : 'hidden'}>
