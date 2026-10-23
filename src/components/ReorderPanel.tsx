@@ -1,88 +1,101 @@
-import React, { useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, CircleDollarSign, PackageCheck, TrendingUp } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { AlertTriangle, BarChart3, CircleDollarSign, Info, PackageCheck, SearchCheck, TrendingUp } from 'lucide-react';
+import { SQPRow } from '../types';
 
+type Props = { sqpRows: SQPRow[] };
 type Inputs = {
-  dailySales: number; demandAdjust: number; budget: number; cpc: number; adCvr: number; organicShare: number;
-  onHand: number; inbound: number; reserved: number; leadTime: number; safetyDays: number; reviewDays: number;
-  contribution: number; returnRate: number; asinCvr: number; marketCvr: number; shareChange: number;
+  profitRate30: number; returnRate: number; rating: number; conversionRate30: number; acoas: number; acos: number;
+  salesM1: number; salesM2: number; salesM3: number;
+  adBudget: number; cpc: number; adCvr: number; adOrderShare: number;
+  planningDays: number; safetyDays: number; totalStock: number;
 };
-
-const initial: Inputs = {
-  dailySales: 10.5, demandAdjust: 0, budget: 4500, cpc: 0.72, adCvr: 3.7, organicShare: 38,
-  onHand: 280, inbound: 0, reserved: 0, leadTime: 45, safetyDays: 15, reviewDays: 30,
-  contribution: 8, returnRate: 2, asinCvr: 3.2, marketCvr: 2.7, shareChange: 0.2,
+const initialInputs: Inputs = {
+  profitRate30: 18, returnRate: 3.5, rating: 4.3, conversionRate30: 12, acoas: 16, acos: 28,
+  salesM1: 150, salesM2: 190, salesM3: 220, adBudget: 900, cpc: 0.9, adCvr: 10, adOrderShare: 35,
+  planningDays: 30, safetyDays: 20, totalStock: 180,
 };
+const pct = (value: number) => (value * 100).toFixed(1) + '%';
+const qty = (value: number) => new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 0 }).format(Math.max(0, value));
 
-const n = (value: number) => Math.max(0, Number(value) || 0);
-const unit = (value: number) => `${Math.round(value).toLocaleString()} 件`;
+export default function ReorderPanel({ sqpRows }: Props) {
+  const [inputs, setInputs] = useState<Inputs>(initialInputs);
+  const update = (key: keyof Inputs, value: string) => {
+    const numberValue = Number(value);
+    setInputs((current) => ({ ...current, [key]: Number.isFinite(numberValue) ? Math.max(0, numberValue) : 0 }));
+  };
+  const coreKeywords = useMemo(() => [...sqpRows]
+    .filter((row) => row.kw?.trim() && row.imp > 0 && row.clk > 0)
+    .sort((a, b) => b.ord * 100 + b.clk + b.qc * 0.01 - (a.ord * 100 + a.clk + a.qc * 0.01))
+    .slice(0, 10), [sqpRows]);
+  const core = useMemo(() => {
+    const clicks = coreKeywords.reduce((sum, row) => sum + row.clk, 0);
+    const orders = coreKeywords.reduce((sum, row) => sum + row.ord, 0);
+    const marketClicks = coreKeywords.reduce((sum, row) => sum + row.tc, 0);
+    const marketOrders = coreKeywords.reduce((sum, row) => sum + row.to, 0);
+    const impWeight = coreKeywords.reduce((sum, row) => sum + Math.max(row.imp, 1), 0);
+    const clickWeight = coreKeywords.reduce((sum, row) => sum + Math.max(row.clk, 1), 0);
+    return {
+      asinCvr: clicks ? orders / clicks : 0,
+      marketCvr: marketClicks ? marketOrders / marketClicks : 0,
+      ci: impWeight ? coreKeywords.reduce((sum, row) => sum + row.clickImpRatio * Math.max(row.imp, 1), 0) / impWeight : 0,
+      bi: clickWeight ? coreKeywords.reduce((sum, row) => sum + row.buyClickRatio * Math.max(row.clk, 1), 0) / clickWeight : 0,
+    };
+  }, [coreKeywords]);
+  const model = useMemo(() => {
+    const factor = inputs.planningDays / 30;
+    const historical = (inputs.salesM1 * 0.2 + inputs.salesM2 * 0.3 + inputs.salesM3 * 0.5) * factor;
+    const adOrders = inputs.adBudget / Math.max(inputs.cpc, 0.01) * (inputs.adCvr / 100);
+    const adImplied = adOrders / Math.max(inputs.adOrderShare / 100, 0.01) * factor;
+    const futureSales = historical * 0.6 + adImplied * 0.4;
+    const safetyStock = inputs.planningDays ? futureSales / inputs.planningDays * inputs.safetyDays : 0;
+    const targetStock = futureSales + safetyStock;
+    return { historical, adOrders, adImplied, futureSales, safetyStock, targetStock, orderQty: Math.max(0, targetStock - inputs.totalStock) };
+  }, [inputs]);
 
-function scenario(i: Inputs, multiplier: number) {
-  const daily = n(i.dailySales) * (1 + i.demandAdjust / 100) * multiplier;
-  const period = n(i.reviewDays);
-  const adOrders = n(i.budget) / Math.max(0.01, n(i.cpc)) * (n(i.adCvr) / 100);
-  const organicOrders = adOrders * n(i.organicShare) / Math.max(1, 100 - n(i.organicShare));
-  const runRateOrders = daily * period;
-  const forecast = (adOrders + organicOrders + runRateOrders) / 2;
-  const inventory = n(i.onHand) + n(i.inbound) - n(i.reserved);
-  const dailyForecast = forecast / Math.max(1, period);
-  const beforeArrival = dailyForecast * n(i.leadTime);
-  const safety = dailyForecast * n(i.safetyDays);
-  const arrivalInventory = inventory - beforeArrival;
-  const reorderPoint = beforeArrival + safety;
-  const quantity = Math.max(0, dailyForecast * period + safety - arrivalInventory);
-  return { forecast, inventory, beforeArrival, safety, arrivalInventory, reorderPoint, quantity };
-}
-
-export default function ReorderPanel() {
-  const [inputs, setInputs] = useState<Inputs>(initial);
-  const update = (key: keyof Inputs, value: string) => setInputs(prev => ({ ...prev, [key]: Number(value) }));
-  const base = useMemo(() => scenario(inputs, 1), [inputs]);
-  const checks = [
-    { label: '广告后单件贡献利润为正', ok: inputs.contribution > 0, value: `$${inputs.contribution.toFixed(2)}` },
-    { label: '退款/退货率不高于 5%', ok: inputs.returnRate <= 5, value: `${inputs.returnRate.toFixed(1)}%` },
-    { label: '核心词 CVR 不低于大盘', ok: inputs.asinCvr >= inputs.marketCvr, value: `${inputs.asinCvr.toFixed(1)}% / ${inputs.marketCvr.toFixed(1)}%` },
-    { label: '核心词购买份额未下降', ok: inputs.shareChange >= 0, value: `${inputs.shareChange >= 0 ? '+' : ''}${inputs.shareChange.toFixed(1)}pp` },
-  ];
-  const passed = checks.filter(item => item.ok).length;
-  const needsOrder = base.inventory <= base.reorderPoint;
-  const decision = !needsOrder ? '暂不下单，继续监控' : passed === 4 ? '建议正常返单' : passed >= 3 ? '建议小批返单 / 人工复核' : '暂缓放量，先修复产品指标';
-  const decisionClass = !needsOrder ? 'text-slate-700 bg-slate-100 border-slate-200' : passed === 4 ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-amber-700 bg-amber-50 border-amber-200';
-  const cases: Array<[string, number, string]> = [['保守', .9, '需求或转化低于预期'], ['基准', 1, '维持当前经营假设'], ['进取', 1.1, '搜索与自然单持续改善']];
-
-  const fields: Array<[keyof Inputs, string, string, number]> = [
-    ['dailySales', '近 4 周平均日销', '件/天', .1], ['demandAdjust', '基准需求调整', '%', 1], ['budget', '计划广告预算', '美元/周期', 100],
-    ['cpc', '预期 CPC', '美元', .01], ['adCvr', '预期广告 CVR', '%', .1], ['organicShare', '自然订单占比', '%', 1],
-    ['onHand', 'FBA / AWD / 海外仓可用', '件', 1], ['inbound', '已确认在途库存', '件', 1], ['reserved', '不可售、预留、移除', '件', 1],
-    ['leadTime', '总补货周期', '天', 1], ['safetyDays', '安全库存天数', '天', 1], ['reviewDays', '下一批补货间隔', '天', 1],
-  ];
-
-  return <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-    <div className="rounded-2xl bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 border border-blue-900/70 text-white p-6 sm:p-8 shadow-xl overflow-hidden relative">
-      <div className="absolute -right-10 -top-14 w-56 h-56 bg-cyan-400/10 rounded-full blur-2xl" />
-      <div className="relative flex flex-col lg:flex-row lg:items-end justify-between gap-5">
-        <div><div className="text-cyan-300 text-[11px] tracking-[.2em] font-bold uppercase">New Product Replenishment Model</div><h2 className="text-2xl sm:text-3xl font-black mt-2">新品返单决策模型</h2><p className="text-sm text-blue-100/80 mt-2 max-w-2xl">先判断产品是否值得继续投放，再按未来销量、供应链周期与库存位置，计算保守、基准、进取三档返单量。</p></div>
-        <div className="rounded-xl px-4 py-3 bg-white/10 border border-white/15 text-xs text-blue-100 max-w-xs"><b className="text-white">本地计算：</b> 所有输入与计算仅在浏览器中运行，不上传经营数据。</div>
+  const sqpReady = coreKeywords.length >= 10;
+  const productHealthy = inputs.profitRate30 > 0 && inputs.returnRate <= 5 && inputs.rating >= 4 && inputs.acoas <= inputs.profitRate30;
+  const searchHealthy = sqpReady && core.asinCvr >= core.marketCvr && core.ci > 1 && core.bi > 1;
+  const decision = !sqpReady ? '待补齐搜索绩效数据' : model.orderQty <= 0 ? '暂不需要返单' : productHealthy && searchHealthy ? '建议返单' : '需人工复核后返单';
+  const field = (label: string, key: keyof Inputs, suffix: string, step = '0.1') => (
+    <label className="block rounded-xl border border-slate-200 bg-white p-3">
+      <span className="text-xs font-medium text-slate-500">{label}</span>
+      <div className="mt-1 flex items-center gap-1">
+        <input className="w-full bg-transparent text-lg font-semibold text-slate-900 outline-none" type="number" min="0" step={step} value={inputs[key]} onChange={(event) => update(key, event.target.value)} />
+        <span className="text-xs text-slate-400">{suffix}</span>
       </div>
+    </label>
+  );
+  return <div className="space-y-6">
+    <div className="rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50 to-cyan-50 p-5">
+      <div className="flex items-start gap-3"><PackageCheck className="mt-0.5 h-6 w-6 text-blue-600" /><div><h2 className="text-lg font-bold text-slate-900">新品返单决策模型</h2><p className="mt-1 text-sm text-slate-600">基于近三个月销量、广告反推销量、搜索绩效核心词和安全库存，计算实际返单量。</p></div></div>
     </div>
-
-    <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_.8fr] gap-6">
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
-        <div className="flex items-center gap-2 mb-1"><PackageCheck className="w-5 h-5 text-blue-600" /><h3 className="font-bold text-slate-900">输入经营与库存假设</h3></div><p className="text-xs text-slate-500 mb-5">新品优先使用上架后近 4 周真实数据；各颜色、尺寸变体需分别测算。</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-4">
-          {fields.map(([key, label, suffix, step], index) => <label key={key} className={index === 0 || index === 6 ? 'sm:col-span-2 lg:col-span-3 border-t border-slate-100 pt-4 mt-1' : ''}><span className="block text-xs font-semibold text-slate-600 mb-1.5">{label}<span className="text-slate-400 font-normal ml-1">{suffix}</span></span><input type="number" min="0" step={step} value={inputs[key]} onChange={event => update(key, event.target.value)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-800 outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400" /></label>)}
-        </div>
-      </div>
-
-      <div className="space-y-5">
-        <div className={`rounded-2xl border p-5 ${decisionClass}`}><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider opacity-75"><TrendingUp className="w-4 h-4" />返单决策</div><div className="font-black text-2xl mt-3">{decision}</div><p className="text-sm mt-2 opacity-80">{needsOrder ? '库存位置已低于补货周期需求与安全库存之和。' : '库存仍能覆盖补货周期与安全库存，不建议提前压货。'}</p><div className="grid grid-cols-3 gap-2 mt-5"><Metric label="库存位置" value={unit(base.inventory)} /><Metric label="下单触发点" value={unit(base.reorderPoint)} /><Metric label="基准返单" value={unit(base.quantity)} /></div></div>
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5"><div className="flex items-center gap-2"><CircleDollarSign className="w-5 h-5 text-blue-600" /><h3 className="font-bold text-slate-900">产品健康门槛</h3></div><div className="mt-4 space-y-2.5">{checks.map(item => <div key={item.label} className="flex items-center justify-between gap-3 text-xs rounded-lg bg-slate-50 px-3 py-2.5"><span className="text-slate-600">{item.label}</span><span className={`font-bold flex items-center gap-1 ${item.ok ? 'text-emerald-600' : 'text-amber-600'}`}>{item.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}{item.value}</span></div>)}</div></div>
-      </div>
+    <div className="grid gap-4 xl:grid-cols-2">
+      <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><div className="mb-3 flex items-center gap-2"><CircleDollarSign className="h-4 w-4 text-emerald-600" /><h3 className="font-semibold text-slate-900">近30天产品健康度</h3></div><div className="grid grid-cols-2 gap-3 lg:grid-cols-3">{field('近30天利润率', 'profitRate30', '%')}{field('退货率', 'returnRate', '%')}{field('产品评分', 'rating', '分')}{field('转化率', 'conversionRate30', '%')}{field('ACoAS', 'acoas', '%')}{field('ACOS', 'acos', '%')}</div></section>
+      <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><div className="mb-3 flex items-center gap-2"><TrendingUp className="h-4 w-4 text-violet-600" /><h3 className="font-semibold text-slate-900">最近3个月销量（人工填写）</h3></div><div className="grid grid-cols-3 gap-3">{field('第1个月（较早）', 'salesM1', '件', '1')}{field('第2个月', 'salesM2', '件', '1')}{field('最近1个月', 'salesM3', '件', '1')}</div><p className="mt-3 text-xs leading-5 text-slate-500">历史基准按 20% / 30% / 50% 加权，近期销量权重更高。</p></section>
     </div>
-
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden"><div className="p-5 sm:p-6 border-b border-slate-100"><h3 className="font-bold text-slate-900">未来销量与返单量情景</h3><p className="text-xs text-slate-500 mt-1">广告销量 = 广告预算 ÷ CPC × 广告 CVR；自然销量按自然订单占比推算，再与近期实际日销进行校准。</p></div><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-sm"><thead className="bg-slate-50 text-slate-500 text-xs"><tr><th className="text-left px-6 py-3 font-semibold">情景</th><th className="text-right px-5 py-3 font-semibold">未来周期预测销量</th><th className="text-right px-5 py-3 font-semibold">到货前预计销量</th><th className="text-right px-5 py-3 font-semibold">预计到货时库存</th><th className="text-right px-6 py-3 font-semibold">建议返单量</th></tr></thead><tbody>{cases.map(([name, multiplier, note]) => { const data = scenario(inputs, multiplier); return <tr key={name} className="border-t border-slate-100"><td className="px-6 py-4"><b className="text-slate-800">{name}</b><span className="block text-xs text-slate-400 mt-0.5">{note}</span></td><td className="px-5 py-4 text-right text-slate-700">{unit(data.forecast)}</td><td className="px-5 py-4 text-right text-slate-700">{unit(data.beforeArrival)}</td><td className={`px-5 py-4 text-right font-medium ${data.arrivalInventory < 0 ? 'text-red-600' : 'text-slate-700'}`}>{unit(data.arrivalInventory)}</td><td className="px-6 py-4 text-right font-black text-blue-700">{unit(data.quantity)}</td></tr>})}</tbody></table></div><div className="px-6 py-4 text-xs text-slate-500 bg-slate-50 border-t border-slate-100"><b className="text-slate-700">计算逻辑：</b>返单量 = 预计到货至下一批可到货期间的预测销量 + 安全库存 − 预计到货时库存位置。</div></div>
+    <div className="grid gap-4 xl:grid-cols-2">
+      <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><div className="mb-3 flex items-center gap-2"><BarChart3 className="h-4 w-4 text-orange-600" /><h3 className="font-semibold text-slate-900">广告反推销量（人工填写）</h3></div><div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{field('广告预算', 'adBudget', '$', '1')}{field('广告 CPC', 'cpc', '$')}{field('广告转化率', 'adCvr', '%')}{field('广告出单占比', 'adOrderShare', '%')}</div><p className="mt-3 text-xs leading-5 text-slate-500">广告订单 = 预算 ÷ CPC × 广告转化率；广告反推总销量 = 广告订单 ÷ 广告出单占比。</p></section>
+      <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><div className="mb-3 flex items-center gap-2"><PackageCheck className="h-4 w-4 text-blue-600" /><h3 className="font-semibold text-slate-900">库存与补货周期</h3></div><div className="grid grid-cols-3 gap-3">{field('预测周期', 'planningDays', '天', '1')}{field('安全库存天数', 'safetyDays', '天', '1')}{field('当前总库存', 'totalStock', '件', '1')}</div><p className="mt-3 text-xs leading-5 text-slate-500">当前总库存请填可售、在途等可用于本周期销售的库存总和。</p></section>
+    </div>
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><SearchCheck className="h-5 w-5 text-blue-600" /><h3 className="font-semibold text-slate-900">搜索绩效核心关键词（自动生成 Top 10）</h3></div><span className={'rounded-full px-3 py-1 text-xs font-semibold ' + (sqpReady ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>{sqpReady ? '已提取 10 个核心词' : '有效词 ' + coreKeywords.length + ' / 10'}</span></div>
+      {sqpRows.length === 0 ? <div className="mt-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-800"><Info className="mr-2 inline h-4 w-4" />请先在“搜索查询绩效”页面上传数据；上传后此处将自动选出核心词。</div> : <>
+        <div className="mt-4 grid gap-3 md:grid-cols-4"><Metric label="核心词 CVR" value={pct(core.asinCvr)} /><Metric label="核心词大盘 CVR" value={pct(core.marketCvr)} /><Metric label="Ci / 流量力" value={core.ci.toFixed(2) + (core.ci > 1 ? ' ✓' : ' ✕')} good={core.ci > 1} /><Metric label="Bi / 承接力" value={core.bi.toFixed(2) + (core.bi > 1 ? ' ✓' : ' ✕')} good={core.bi > 1} /></div>
+        <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[720px] text-left text-sm"><thead className="border-b border-slate-200 text-xs text-slate-500"><tr><th className="pb-2">核心关键词</th><th className="pb-2">本品 CVR</th><th className="pb-2">大盘 CVR</th><th className="pb-2">Ci / 流量力</th><th className="pb-2">Bi / 承接力</th><th className="pb-2">判断</th></tr></thead><tbody>{coreKeywords.map((row) => { const pass = row.asinCVR >= row.marketCVR && row.clickImpRatio > 1 && row.buyClickRatio > 1; return <tr key={row.kw} className="border-b border-slate-100"><td className="py-2.5 font-medium text-slate-800">{row.kw}</td><td>{pct(row.asinCVR)}</td><td>{pct(row.marketCVR)}</td><td className={row.clickImpRatio > 1 ? 'text-emerald-700' : 'text-amber-700'}>{row.clickImpRatio.toFixed(2)}</td><td className={row.buyClickRatio > 1 ? 'text-emerald-700' : 'text-amber-700'}>{row.buyClickRatio.toFixed(2)}</td><td><span className={'rounded-full px-2 py-1 text-xs ' + (pass ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>{pass ? '漏斗更精准' : '待优化'}</span></td></tr>; })}</tbody></table></div>
+        {!sqpReady && <p className="mt-3 text-xs text-amber-700">有效关键词不足 10 个，模型不会虚构数据；请上传更多搜索绩效记录。</p>}
+      </>}
+    </section>
+    <section className="rounded-2xl border border-blue-200 bg-blue-50 p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-sm font-medium text-blue-700">返单结论</p><h3 className="mt-1 text-2xl font-bold text-slate-900">{decision}</h3><p className="mt-1 text-sm text-slate-600">实际返单量 = 未来销量 + 安全库存 − 当前总库存</p></div><div className="rounded-2xl bg-blue-600 px-6 py-4 text-center text-white"><p className="text-xs text-blue-100">建议返单量</p><p className="mt-1 text-3xl font-bold">{qty(model.orderQty)} <span className="text-base">件</span></p></div></div>
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5"><Stat label="近3月加权基准" value={qty(model.historical)} /><Stat label="广告反推总销量" value={qty(model.adImplied)} /><Stat label="未来销量预测" value={qty(model.futureSales)} /><Stat label="安全库存" value={qty(model.safetyStock)} /><Stat label="目标库存" value={qty(model.targetStock)} /></div>
+      <div className="mt-4 flex flex-wrap gap-2 text-xs"><span className={'rounded-full px-3 py-1 ' + (productHealthy ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>{productHealthy ? '产品经营指标通过' : '产品经营指标需复核'}</span><span className={'rounded-full px-3 py-1 ' + (searchHealthy ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>{searchHealthy ? '核心搜索漏斗通过' : '核心搜索漏斗待优化'}</span></div>
+      <p className="mt-3 flex gap-2 text-xs leading-5 text-slate-600"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />未来销量 = 近3月加权基准 × 60% + 广告反推总销量 × 40%。修改经营假设后，返单量即时重算。</p>
+    </section>
   </div>;
 }
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-lg bg-white/50 border border-white/40 p-2.5"><span className="block text-[10px] opacity-70">{label}</span><b className="block mt-1 text-sm">{value}</b></div>;
+function Metric({ label, value, good }: { label: string; value: string; good?: boolean }) {
+  return <div className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">{label}</p><p className={'mt-1 text-xl font-bold ' + (good === undefined ? 'text-slate-900' : good ? 'text-emerald-600' : 'text-amber-600')}>{value}</p></div>;
+}
+function Stat({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-xl bg-white p-3"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 font-bold text-slate-900">{value} 件</p></div>;
 }
