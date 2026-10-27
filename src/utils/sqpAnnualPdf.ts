@@ -1,6 +1,6 @@
 declare global { interface Window { jspdf?: { jsPDF: new (options?: object) => any } } }
 
-type Row = { kw: string; qc: number; imp: number; clk: number; ord: number; ti: number; tc: number; to: number; buyShare: number };
+type Row = { kw: string; qc: number; imp: number; clk: number; ord: number; ti: number; tc: number; to: number; buyShare: number; marketPrice?: number; asinPrice?: number };
 type MonthData = Record<number, { fileName: string; rowCount: number; rows: Row[] }>;
 const n = (x: number) => x.toLocaleString('en-US');
 const p = (x: number) => `${(x * 100).toFixed(2)}%`;
@@ -45,5 +45,41 @@ export async function downloadSqpAnnualPdf(monthly: MonthData) {
   section('6','机会与风险',y+30);y+=95;y=para(`风险提示：本报告基于每月 Top100 词池，词池变动会影响全量趋势；稳定词面板为 ${stable.length} 个词。词级订单较小的 CVR 已在报告中按低置信处理。`,90,y,1420,24,'#b54437');
   section('7','行动建议',y+30);y+=95;y=para('1) 核验库存、Buy Box、类目节点和核心词索引；2) 对真实适配的产品类型、尺寸和风格词完善页面覆盖与搜索结果展示；3) 相关机会词仅做受控测试，并以曝光份额、点击率、订单和 CVR 复盘。',90,y,1420,24);
   section('8','方法与限制',y+30);y+=95;para('计算口径：先汇总绝对量再计算 CTR、CVR 与阶段份额；稳定词指每个已上传月份均出现的词。累计搜索量仅是月度 Top100 样本累计，不代表类目总盘。未上传广告报表时，不输出 ROAS、ACoS、出价、预算或增量结论。',90,y,1420,23);
-  const JsPdf=await getJsPdf(); const pdf=new JsPdf({unit:'px',format:[1600,2260],compress:true}); pdf.addImage(canvas.toDataURL('image/jpeg',0.94),'JPEG',0,0,1600,2260); pdf.save(`SQP_年度趋势分析_${months[0]}-${months.at(-1)}月.pdf`);
+  // Full report pages: the first page is the executive overview above; subsequent pages retain the Skill's eight-section framework.
+  const detailPage=(title:string, subtitle:string, blocks:{heading:string; body:string; rows?:string[][]}[])=>{
+    const c=document.createElement('canvas');c.width=1600;c.height=2260;const g=c.getContext('2d')!;g.fillStyle='#fff';g.fillRect(0,0,1600,2260);g.textBaseline='top';
+    const tx=(s:string,x:number,yy:number,sz=26,col='#173b55',weight='normal')=>{g.fillStyle=col;g.font=`${weight} ${sz}px Microsoft YaHei, SimSun, sans-serif`;g.fillText(s,x,yy)};
+    const pa=(s:string,x:number,yy:number,w=1400,sz=24,col='#475569')=>{g.fillStyle=col;g.font=`${sz}px Microsoft YaHei, SimSun, sans-serif`;let q='';for(const ch of s){if(g.measureText(q+ch).width>w){g.fillText(q,x,yy);q=ch;yy+=sz*1.55}else q+=ch}if(q)g.fillText(q,x,yy);return yy+sz*1.7};
+    g.fillStyle='#12324a';g.fillRect(0,0,1600,180);tx(title,90,55,44,'#fff','bold');tx(subtitle,90,120,20,'#dcecf5');let yy=230;
+    blocks.forEach((b,bi)=>{g.fillStyle='#1483ba';g.beginPath();g.arc(112,yy+18,22,0,Math.PI*2);g.fill();tx(String(bi+1),105,yy+4,17,'#fff','bold');tx(b.heading,150,yy,31,'#173b55','bold');g.strokeStyle='#cbd5e1';g.beginPath();g.moveTo(150,yy+49);g.lineTo(1510,yy+49);g.stroke();yy=pa(b.body,90,yy+76);if(b.rows?.length){const cols=b.rows[0].length, cw=1420/cols;b.rows.forEach((row,ri)=>{const h=38;g.fillStyle=ri===0?'#12324a':ri%2?'#f1f5f9':'#fff';g.fillRect(90,yy,cw*cols,h);row.forEach((cell,ci)=>tx(cell,100+ci*cw,yy+8,ri===0?18:17,ri===0?'#fff':'#173b55',ri===0?'bold':'normal'));yy+=h});}yy+=38;});
+    tx('范围：月度 Top100 样本；累计搜索量不代表类目总盘。数据仅在本地浏览器处理。',90,2185,17,'#64748b');return c;
+  };
+  const stableByMonth=months.map(m=>monthly[m].rows.filter(r=>stable.includes(r.kw)));
+  const price=(rows:Row[],key:'marketPrice'|'asinPrice')=>{const valid=rows.filter(r=>(r[key]||0)>0);return valid.length?valid.reduce((a,r)=>a+(r[key]||0),0)/valid.length:0};
+  const p2=detailPage('核心关键词与漏斗诊断','关键词趋势与市场/ASIN 加权漏斗',[
+    {heading:'核心关键词趋势',body:`按 ASIN 订单汇总的前列关键词如下。订单基数较低时，关键词 CVR 仅作方向性参考，不将极端值视为确定优势。`,rows:[['关键词','出现月数','累计搜索量','ASIN订单','购买份额'],...top.map(r=>[r.kw.slice(0,28),String(r.appearances),n(r.qc),n(r.ord),p(r.ord/r.to)])]},
+    {heading:'漏斗比较',body:`市场 CTR ${p(mc/mi)}，ASIN CTR ${p(ac/ai)}；市场点击-购买 ${p(mo/mc)}，ASIN 点击-购买 ${p(ao/ac)}。应先以绝对量核验曝光、点击、订单的短板，而不是先假定详情页转化问题。`,rows:[['阶段','市场样本量','ASIN样本量','ASIN阶段份额'],['曝光',n(mi),n(ai),p(ai/mi)],['点击',n(mc),n(ac),p(ac/mc)],['订单',n(mo),n(ao),p(ao/mo)]]}
+  ]);
+  const p3=detailPage('搜索份额与关键词词群','全量与稳定词双面板，避免词池更替误导趋势',[
+    {heading:'Share of Search',body:`曝光、点击、购买份额分别为 ${p(ai/mi)}、${p(ac/mc)}、${p(ao/mo)}。若 ASIN 转化不弱但曝光份额偏低，应优先排查索引、排名、库存和搜索结果页呈现。`},
+    {heading:'月度全量与稳定词面板',body:'稳定词定义为每个已上传月份均出现的查询词；该面板用于趋势方向判断。',rows:[['月份','全量搜索量','全量订单','稳定词订单','稳定词数'],...months.map((m,i)=>[`${m}月`,n(sum(monthly[m].rows,'qc')),n(sum(monthly[m].rows,'ord')),n(sum(stableByMonth[i],'ord')),String(stable.length)])]},
+    {heading:'词群管理',body:'完整产品类型词与修饰词分开管理：产品类型、尺寸、材质/风格、使用场景、季节和语言。只有与商品真实属性相符的词才进入 SEO 或受控测试。'}
+  ]);
+  const p4=detailPage('价格、履约与机会筛选','价格和配送均只作方向性背景',[
+    {heading:'价格与履约环境',body:`点击/订单阶段的市场与 ASIN 价格中位数按词均值仅作背景：市场 ${price(all,'marketPrice')?`$${price(all,'marketPrice').toFixed(2)}`:'未提供'}，ASIN ${price(all,'asinPrice')?`$${price(all,'asinPrice').toFixed(2)}`:'未提供'}。市场中位价混合变体、套装和材质，不可直接得出“过高/过低”定价结论。`},
+    {heading:'机会与风险',body:`机会词筛选规则：高需求、低购买份额、且 ASIN 订单/点击基数足够，并须先人工核对产品相关性。当前样本中前列词的订单基数需与实际搜索词、广告或库存状态交叉验证；不因高搜索量直接建议放量。`},
+    {heading:'数据风险',body:`已上传 ${months.length} 个月份，共 ${all.length} 条月度记录、${new Set(all.map(r=>r.kw)).size} 个去重词。词数明显少于其他月份或月份缺失时，应在复盘中显式标注，不能按完整年度解释。`}
+  ]);
+  const p5=detailPage('建议与复盘节奏','将诊断转为可验证的运营动作',[
+    {heading:'0-7 天：修复可见度',body:'检查库存、停售状态、Buy Box、类目节点、父子变体和核心词索引；以核心产品词是否可检索、曝光份额是否止跌作为验收。'},
+    {heading:'第 2-3 周：优化搜索结果页',body:'以真实规格为约束，完善产品类型、尺寸和风格相关的标题、五点与图片表达；观察点击份额、ASIN CTR 与点击-购买 CVR，而不是只看搜索量。'},
+    {heading:'第 4 周：受控扩词测试',body:'只对已人工确认相关的高需求低份额词做小范围 SEO 或广告测试。广告投入需要额外的广告报表，不能从 SQP 单独推导 ROAS、ACoS、出价或预算。'},
+    {heading:'每月：双面板复盘',body:'同步追踪全量 Top100 和稳定词面板；记录每月词数、异常月份、曝光/点击/购买份额、核心词归因订单及稳定词数量。'}
+  ]);
+  const p6=detailPage('方法、来源与校验口径','数据质量和计算边界',[
+    {heading:'来源校验',body:`本报告读取已上传的 ${months.length} 个文件；月份范围为 ${months[0]} 月至 ${months.at(-1)} 月。建议在上传前确认每份文件表头、ASIN、报告日期和文件月份一致，并识别重复文件或不同 ASIN。`,rows:[['月份','文件行数','校验提示'],...months.map(m=>[`${m}月`,String(monthly[m].rowCount),monthly[m].rowCount===100?'Top100 样本':'词数异常，需复核'])]},
+    {heading:'计算口径',body:'绝对量先按关键词和月份汇总后计算加权比率；市场 CTR=市场点击/市场曝光，ASIN CTR=ASIN 点击/ASIN 曝光，点击-购买=订单/点击，阶段份额=ASIN 阶段计数/市场阶段计数。'},
+    {heading:'范围限制',body:'月度 Top100 是采样词池，不是类目总盘；稳定词仅用于减少词池更替的干扰。关键词订单过小、价格字段混合变体、以及市场配送字段均应按低置信或方向性背景处理。'}
+  ]);
+  const JsPdf=await getJsPdf(); const pdf=new JsPdf({unit:'px',format:[1600,2260],compress:true}); const add=(c:HTMLCanvasElement)=>{pdf.addPage([1600,2260]);pdf.addImage(c.toDataURL('image/jpeg',0.94),'JPEG',0,0,1600,2260)};pdf.addImage(canvas.toDataURL('image/jpeg',0.94),'JPEG',0,0,1600,2260);[p2,p3,p4,p5,p6].forEach(add); pdf.save(`SQP_年度完整分析报告_${months[0]}-${months.at(-1)}月.pdf`);
 }
