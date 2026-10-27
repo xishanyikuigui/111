@@ -28,7 +28,7 @@ import {
 } from 'recharts';
 import { SQPRow, CompareRow } from '../types';
 import { cleanNum, cleanPct, cleanSqpShare, parsePriceStr, getDiagnosis, getTrendInterpretation } from '../utils/analyzers';
-import { downloadSqpAnnualPdf } from '../utils/sqpAnnualPdf';
+import { downloadSqpAnnualHtml } from '../utils/sqpAnnualHtml';
 
 // Common Amazon English catalog stopwords to filter noise
 const STOP_WORDS = new Set([
@@ -276,7 +276,7 @@ export default function SqpPanel({
   const [expandedStem, setExpandedStem] = useState<string | null>(null);
 
   // States for monthly SQP reports (1-12)
-  const [monthlySqpData, setMonthlySqpData] = useState<Record<number, { fileName: string; rowCount: number; rows: SQPRow[] }>>({});
+  const [monthlySqpData, setMonthlySqpData] = useState<Record<number, { fileName: string; rowCount: number; rows: SQPRow[]; period?: string }>>({});
   const [monthlyStatus, setMonthlyStatus] = useState<string>('');
   const [selectedAnnualKw, setSelectedAnnualKw] = useState<string>('__TOP20_ASIN__');
   const [annualKwSearch, setAnnualKwSearch] = useState<string>('');
@@ -388,6 +388,15 @@ export default function SqpPanel({
     }
 
     return null;
+  };
+
+  // Preserve the real reporting period for annual exports. The existing monthly slots remain
+  // 1-12 for UI compatibility, while the report generator sorts by this YYYY-MM value.
+  const detectReportPeriod = (fileName: string, rows: string[][], month: number): string | undefined => {
+    const metadata = [fileName, ...rows.slice(0, 10).flat().map(value => String(value || ''))].join(' ');
+    const match = metadata.match(/(20\d{2})[年_./-]+(0?[1-9]|1[0-2])(?:[月_./-]|\s)/);
+    if (match) return `${match[1]}-${match[2].padStart(2, '0')}`;
+    return undefined;
   };
 
   // Helper to detect month from the entire rows of spreadsheet
@@ -581,12 +590,14 @@ export default function SqpPanel({
         };
       });
 
+      const period = detectReportPeriod(file.name, rows, month);
       setMonthlySqpData(prev => ({
         ...prev,
         [month]: {
           fileName: file.name,
           rowCount: processed.length,
-          rows: processed
+          rows: processed,
+          period
         }
       }));
       setMonthlyStatus(prev => `✅ 成功解析 ${month}月份 数据（${processed.length}行）`);
@@ -3294,12 +3305,18 @@ export default function SqpPanel({
                       
                       <div className="flex flex-wrap gap-2 shrink-0">
                         <button
-                          onClick={() => void downloadSqpAnnualPdf(monthlySqpData).catch(error => alert(error instanceof Error ? error.message : 'PDF 生成失败，请重试。'))}
+                          onClick={() => {
+                            try {
+                              downloadSqpAnnualHtml(monthlySqpData);
+                            } catch (error) {
+                              alert(error instanceof Error ? error.message : 'HTML 报告生成失败，请重试。');
+                            }
+                          }}
                           className="bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs px-3 py-2 rounded-lg flex items-center gap-1.5 transition-all shadow-3xs cursor-pointer"
-                          title="按已上传的月度 SQP 文件生成并下载中文 PDF 报告"
+                          title="按 amazon-sqp-ad-report 的年度 SQP 分析口径生成并下载完整 HTML 报告"
                         >
                           <FileText className="w-3.5 h-3.5" />
-                          生成年度 PDF 报告
+                          生成完整版 HTML 报告
                         </button>
                         <button
                           onClick={annualViewMode === 'root' ? downloadRootTrendData : downloadTrendData}

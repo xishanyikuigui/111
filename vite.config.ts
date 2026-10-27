@@ -5,7 +5,7 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
-    base: process.env.GITHUB_ACTIONS === 'true' ? '/111/' : '/',
+    base: process.env.GITHUB_ACTIONS === 'true' ? '/AMZWS-/' : '/',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
