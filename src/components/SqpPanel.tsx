@@ -28,7 +28,7 @@ import {
 } from 'recharts';
 import { SQPRow, CompareRow } from '../types';
 import { cleanNum, cleanPct, cleanSqpShare, parsePriceStr, getDiagnosis, getTrendInterpretation } from '../utils/analyzers';
-import { downloadSqpAnnualHtml } from '../utils/sqpAnnualHtml';
+import { downloadSqpAnnualPdf } from '../utils/sqpAnnualPdf';
 
 // Common Amazon English catalog stopwords to filter noise
 const STOP_WORDS = new Set([
@@ -3306,17 +3306,15 @@ export default function SqpPanel({
                       <div className="flex flex-wrap gap-2 shrink-0">
                         <button
                           onClick={() => {
-                            try {
-                              downloadSqpAnnualHtml(monthlySqpData);
-                            } catch (error) {
-                              alert(error instanceof Error ? error.message : 'HTML 报告生成失败，请重试。');
-                            }
+                            void downloadSqpAnnualPdf(monthlySqpData).catch(error =>
+                              alert(error instanceof Error ? error.message : 'PDF 报告生成失败，请重试。')
+                            );
                           }}
                           className="bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs px-3 py-2 rounded-lg flex items-center gap-1.5 transition-all shadow-3xs cursor-pointer"
-                          title="按 amazon-sqp-ad-report 的年度 SQP 分析口径生成并下载完整 HTML 报告"
+                          title="按 amazon-sqp-ad-report 的年度 SQP 分析口径生成完整多页中文 PDF 报告"
                         >
                           <FileText className="w-3.5 h-3.5" />
-                          生成完整版 HTML 报告
+                          生成完整 PDF 报告
                         </button>
                         <button
                           onClick={annualViewMode === 'root' ? downloadRootTrendData : downloadTrendData}
