@@ -87,5 +87,10 @@ export async function downloadSqpAnnualPdf(monthly: MonthData) {
     {heading:'计算口径',body:'绝对量先按关键词和月份汇总后计算加权比率；市场 CTR=市场点击/市场曝光，ASIN CTR=ASIN 点击/ASIN 曝光，点击-购买=订单/点击，阶段份额=ASIN 阶段计数/市场阶段计数。'},
     {heading:'范围限制',body:'月度 Top100 是采样词池，不是类目总盘；稳定词仅用于减少词池更替的干扰。关键词订单过小、价格字段混合变体、以及市场配送字段均应按低置信或方向性背景处理。'}
   ]);
-  const JsPdf=await getJsPdf(); const pdf=new JsPdf({unit:'px',format:[1600,2260],compress:true}); const add=(c:HTMLCanvasElement)=>{pdf.addPage([1600,2260]);pdf.addImage(c.toDataURL('image/jpeg',0.94),'JPEG',0,0,1600,2260)};pdf.addImage(canvas.toDataURL('image/jpeg',0.94),'JPEG',0,0,1600,2260);[p2,p3,p4,p5,p6].forEach(add); pdf.save(`SQP_年度完整分析报告_${monthLabel(months[0])}-${monthLabel(months.at(-1)!)}.pdf`);
+  const p7=detailPage('广告交叉分析','近 30 天广告报表为可选输入',[
+    {heading:'本次广告数据状态',body:'当前年度趋势模块仅收到月度 SQP 文件，未收到近 30 天的“广告活动、搜索词、投放”三类广告 CSV。因此本报告不计算广告 CTR、CVR、ACoS、ROAS、出价、预算，也不会把自然搜索数据误写成广告效果。'},
+    {heading:'补齐后可输出的交叉分析',body:'当三类广告 CSV 全部提供时，应按广告窗口先汇总绝对值再计算比率，并与年度 SQP 的机会词、强势词及自然购买份额交叉核验：识别自然高潜但未覆盖的词、持续花费却暂停的活动/词、低效词和可执行的否词、竞价与预算动作。'},
+    {heading:'使用边界',body:'广告窗口通常为近 30 天，年度 SQP 为月度 Top100 样本；两者时间范围不同，只用于方向性交叉验证，不可把不同窗口的比率直接混合或外推为全年广告收益。'}
+  ]);
+  const JsPdf=await getJsPdf(); const pdf=new JsPdf({unit:'px',format:[1600,2260],compress:true}); const add=(c:HTMLCanvasElement)=>{pdf.addPage([1600,2260]);pdf.addImage(c.toDataURL('image/jpeg',0.94),'JPEG',0,0,1600,2260)};pdf.addImage(canvas.toDataURL('image/jpeg',0.94),'JPEG',0,0,1600,2260);[p2,p3,p4,p5,p6,p7].forEach(add); pdf.save(`SQP_年度完整分析报告_${monthLabel(months[0])}-${monthLabel(months.at(-1)!)}.pdf`);
 }
