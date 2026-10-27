@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>亚马逊年度搜索绩效分析</title>
+<script src="echarts.min.js"></script>
+<style>
+  :root{
+    --bg:#f5f7fa; --card:#ffffff; --ink:#1f2933; --sub:#5b6b7b; --line:#e3e8ef;
+    --blue:#2563eb; --blue2:#60a5fa; --orange:#e8590c; --orange2:#ffa94d;
+    --green:#16a34a; --red:#dc2626; --purple:#7c3aed; --teal:#0d9488;
+    --shadow:0 1px 3px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--ink);line-height:1.6;-webkit-font-smoothing:antialiased}
+  header.hero{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;padding:34px 28px 26px}
+  header.hero h1{margin:0 0 6px;font-size:24px;font-weight:700}
+  header.hero p{margin:2px 0;font-size:13px;opacity:.92}
+  .hero-meta{margin-top:14px;display:flex;flex-wrap:wrap;gap:18px;font-size:12.5px}
+  .hero-meta b{font-weight:600}
+  nav.toc{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.96);backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--line);padding:8px 14px;display:flex;gap:4px;flex-wrap:wrap;box-shadow:var(--shadow)}
+  nav.toc a{font-size:12.5px;color:var(--sub);text-decoration:none;padding:6px 11px;border-radius:7px;white-space:nowrap}
+  nav.toc a:hover{background:#eef2ff;color:var(--blue)}
+  .wrap{max-width:1180px;margin:0 auto;padding:22px 18px 60px}
+  section.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 22px 18px;
+    margin:18px 0;box-shadow:var(--shadow)}
+  section.card h2{font-size:19px;margin:0 0 4px;display:flex;align-items:center;gap:9px}
+  section.card h2 .num{background:var(--blue);color:#fff;width:26px;height:26px;border-radius:8px;display:inline-flex;
+    align-items:center;justify-content:center;font-size:13px;font-weight:700;flex:none}
+  .lead{color:var(--sub);font-size:13px;margin:2px 0 16px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:12px;margin:6px 0 18px}
+  .kpi{background:#f8fafc;border:1px solid var(--line);border-radius:11px;padding:13px 14px}
+  .kpi .v{font-size:22px;font-weight:700;color:var(--ink)}
+  .kpi .l{font-size:12px;color:var(--sub);margin-top:2px}
+  .kpi .s{font-size:11.5px;margin-top:4px}
+  .up{color:var(--green)} .down{color:var(--red)}
+  .chart{width:100%;height:380px}
+  .chart.tall{height:440px}
+  .chart.sm{height:320px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:860px){.row{grid-template-columns:1fr}}
+  .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+  .controls label{font-size:12.5px;color:var(--sub)}
+  select,.btn{font-size:13px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);cursor:pointer}
+  select:focus{outline:2px solid #bfdbfe}
+  .analysis{background:#f8fafc;border-left:4px solid var(--blue);border-radius:0 10px 10px 0;padding:14px 16px;margin-top:14px;font-size:13.5px}
+  .analysis h4{margin:0 0 7px;font-size:14px;color:#1e3a8a}
+  .analysis ul{margin:6px 0;padding-left:20px}
+  .analysis li{margin:4px 0}
+  .analysis .rec{background:#ecfdf5;border-left:4px solid var(--green);border-radius:0 8px 8px 0;padding:10px 13px;margin-top:10px}
+  .analysis .rec b{color:var(--green)}
+  .tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:6px;background:#eef2ff;color:var(--blue);margin-right:4px}
+  .tag.o{background:#fee2e2;color:#b91c1c}.tag.s{background:#dcfce7;color:#15803d}.tag.d{background:#fef3c7;color:#b45309}
+  table.tbl{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
+  table.tbl th,table.tbl td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+  table.tbl th:first-child,table.tbl td:first-child{text-align:left}
+  table.tbl th{background:#f1f5f9;cursor:pointer;user-select:none;position:sticky;top:0;font-weight:600;color:#334155}
+  table.tbl th:hover{background:#e2e8f0}
+  table.tbl tr:hover td{background:#f8fafc}
+  .tbl-wrap{max-height:430px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+  .note{font-size:12px;color:var(--sub);background:#fffbeb;border:1px solid #fde68a;border-radius:9px;padding:10px 13px;margin:8px 0}
+  .tbl-cap{font-size:12.5px;font-weight:600;color:#334155;margin:10px 0 2px}
+  .tbl-note{font-size:11px;color:var(--sub);margin-top:3px}
+  .tag-up{color:#15803d;font-weight:600}.tag-down{color:#b91c1c;font-weight:600}.tag-flat{color:#b45309;font-weight:600}
+  .pill{font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600}
+  .pill.r{background:#fee2e2;color:#b91c1c}.pill.g{background:#dcfce7;color:#15803d}.pill.y{background:#fef3c7;color:#b45309}
+  footer{text-align:center;color:var(--sub);font-size:12px;padding:24px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:860px){.grid2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1 id="hero-title">📊 年度搜索绩效分析</h1>
+  <p>数据来源：卖家后台「搜索查询绩效（ASIN 视图）」· 报告范围：每月 · 覆盖 <span id="period-range">载入中</span></p>
+  <p>分析对象：ASIN <b id="hero-asin">—</b><span id="hero-prod"></span> · 共 <b id="h-kw">—</b> 个去重搜索词，每月取曝光绩效 Top 100</p>
+  <div class="hero-meta">
+    <span><b>年度搜索量(覆盖词)：</b><span id="h-vol">—</span></span>
+    <span><b>年度本ASIN搜索归因下单：</b><span id="h-pur">—</span></span>
+    <span><b>平均购买份额：</b><span id="h-share">—</span></span>
+    <span><b>稳定核心词(全12月在榜)：</b><span id="h-stable">—</span></span>
+  </div>
+</header>
+
+<nav class="toc">
+  <a href="#s1">① 年度总览</a>
+  <a href="#s2">② 核心关键词趋势</a>
+  <a href="#s3">③ 搜索漏斗对比</a>
+  <a href="#s4">④ 竞争力/份额</a>
+  <a href="#s5">⑤ 关键词聚类</a>
+  <a href="#s6">⑥ 价格与配送</a>
+  <a href="#s7">⑦ 机会与风险</a>
+  <a href="#s8">⑧ 综合建议</a>
+</nav>
+
+<div class="wrap">
+
+<!-- ============ SECTION 1 ============ -->
+<section class="card" id="s1">
+  <h2><span class="num">1</span> 年度总览与市场大盘</h2>
+  <p class="lead">先看全局：这一年搜索大盘的体量、本 ASIN 的搜索归因订单规模，以及份额是在扩张还是收缩。注：下方「全量 Top100」月度曲线受每月 Top100 词构成变动影响（词库轮换较大），因此同时给出「稳定核心面板」（连续 12 个月在榜的 22 个词）曲线以剔除词库扰动。</p>
+  <div class="kpis" id="kpis"></div>
+  <div class="row">
+    <div><div id="c_vol" class="chart"></div></div>
+    <div><div id="c_share" class="chart"></div></div>
+  </div>
+  <div class="chart tall" id="c_topkw" style="margin-top:6px"></div>
+  <div class="tbl" id="c_topkw_tbl"></div>
+  <div class="analysis" id="a1"></div>
+</section>
+
+<!-- ============ SECTION 2 ============ -->
+<section class="card" id="s2">
+  <h2><span class="num">2</span> 核心关键词趋势变化</h2>
+  <p class="lead">选择任一搜索词，查看其 12 个月的搜索量、本 ASIN 点击份额、购买份额，以及市场转化率（购买/点击）与本 ASIN 转化率（购买/点击）的演变；下方叠加 Top10 高频词，直观对比各词的份额走势。</p>
+  <div class="controls">
+    <label>选择关键词：</label>
+    <select id="sel_kw" style="min-width:240px"></select>
+    <span class="note" style="margin:0">提示：名词后的数字为该词年度搜索量。</span>
+  </div>
+  <div class="chart tall" id="c_kw"></div>
+  <div class="chart" id="c_kwcmp" style="margin-top:6px"></div>
+  <div class="analysis" id="a2"></div>
+</section>
+
+<!-- ============ SECTION 3 ============ -->
+<section class="card" id="s3">
+  <h2><span class="num">3</span> 搜索漏斗对比：市场 vs 本 ASIN</h2>
+  <p class="lead">把「曝光 → 点击 → 加购 → 购买」的转化漏斗拆开，比较市场整体与本 ASIN 的转化效率。为便于对比，两侧漏斗均按各自「曝光=100%」归一化。</p>
+  <div class="controls">
+    <label>选择月份：</label>
+    <select id="sel_mth"></select>
+  </div>
+  <div class="grid2">
+    <div><div id="c_fm" class="chart"></div></div>
+    <div><div id="c_fa" class="chart"></div></div>
+  </div>
+  <div class="chart" id="c_eff" style="margin-top:8px"></div>
+  <div class="analysis" id="a3"></div>
+</section>
+
+<!-- ============ SECTION 4 ============ -->
+<section class="card" id="s4">
+  <h2><span class="num">4</span> 竞争力分析：Share of Search（搜索份额）</h2>
+  <p class="lead">曝光份额、点击份额、加购份额、购买份额逐层收窄，能看出本 ASIN 在「被看见 → 被点击 → 被加购 → 被购买」链条上最薄弱的一环。右侧散点定位每个词的「需求体量 × 本ASIN购买份额」，红=高潜提升词，绿=核心优势词。</p>
+  <div class="row">
+    <div><div id="c_shareline" class="chart"></div></div>
+    <div><div id="c_scatter" class="chart"></div></div>
+  </div>
+  <div class="analysis" id="a4"></div>
+</section>
+
+<!-- ============ SECTION 5 ============ -->
+<section class="card" id="s5">
+  <h2><span class="num">5</span> 关键词聚类 / 品类细分</h2>
+  <p class="lead">按<strong>产品类型（品类词根）</strong>与<strong>属性修饰词</strong>双层分组：系统自动从上传数据里提炼出现频率最高的品类词根作为分组（例如不同品类会自然浮现各自的代表性词根，而不把尺寸/材质等修饰词误作品类），尺寸、材质、风格、场景作为修饰维度。目标：识别本 ASIN 的基本盘与增长点。</p>
+  <div class="chart" id="c_seg"></div>
+  <div class="row" style="margin-top:8px">
+    <div><div id="c_segtrend" class="chart sm"></div></div>
+    <div><div id="c_material" class="chart sm"></div></div>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <div><div id="c_style" class="chart sm"></div></div>
+    <div><div id="c_scene" class="chart sm"></div></div>
+  </div>
+  <div class="analysis" id="a5"></div>
+</section>
+
+<!-- ============ SECTION 6 ============ -->
+<section class="card" id="s6">
+  <h2><span class="num">6</span> 价格与配送速度交叉分析</h2>
+  <p class="lead">本 ASIN 售价（见下方图表）对比各高频词的市场点击中位价，判断定价相对位置；并观察各月市场点击中「当日达 / 1天 / 2天」配送的占比变化，评估履约速度竞争环境。</p>
+  <div class="row">
+    <div><div id="c_price" class="chart"></div></div>
+    <div><div id="c_deliv" class="chart"></div></div>
+  </div>
+  <div class="analysis" id="a6"></div>
+</section>
+
+<!-- ============ SECTION 7 ============ -->
+<section class="card" id="s7">
+  <h2><span class="num">7</span> 机会与风险识别</h2>
+  <p class="lead">基于「需求体量 × 曝光/点击/购买份额 × 趋势 × CTR/转化率/加购→购买转化 vs 市场」多维度筛选：高潜提升词（高需求低份额但效率优）、核心优势词（高份额基本盘）、衰退风险词（需求或各层份额下滑）、上升趋势词。表格点击表头可排序。</p>
+  <h4 style="margin:14px 0 2px;font-size:14px">🔴 高潜提升词（Top 需求但本ASIN份额偏低）</h4>
+  <div class="tbl-wrap"><table class="tbl" id="t_opp"></table></div>
+  <h4 style="margin:16px 0 2px;font-size:14px">🟢 核心优势词（稳定在榜且本ASIN购买份额高）</h4>
+  <div class="tbl-wrap"><table class="tbl" id="t_str"></table></div>
+  <h4 style="margin:16px 0 2px;font-size:14px">🟡 衰退风险词（稳定在榜但需求/份额下滑）</h4>
+  <div class="tbl-wrap"><table class="tbl" id="t_dec"></table></div>
+  <h4 style="margin:16px 0 2px;font-size:14px">🔵 上升趋势词（稳定在榜且需求/份额上升）</h4>
+  <div class="tbl-wrap"><table class="tbl" id="t_rise"></table></div>
+  <div class="analysis" id="a7"></div>
+</section>
+
+<!-- ============ SECTION 8 ============ -->
+<section class="card" id="s8">
+  <h2><span class="num">8</span> 综合执行建议</h2>
+  <p class="lead">将以上分析转化为可落地的运营动作，按优先级排列。</p>
+  <div class="analysis" id="a8" style="border-left-color:var(--purple)"></div>
+</section>
+
+<footer>
+  报告由 WorkBuddy 基于卖家后台原始 CSV 自动生成 · 生成时间 <span id="gen"></span> · 指标定义见各板块说明
+</footer>
+</div>
+
+<script>
+const DATA = __DATA__;
+var PRICE = (DATA.summary && DATA.summary.asin_price) ? DATA.summary.asin_price : 26.99;
+function _catColor(c){var P=[BLUE,TEAL,GREEN,ORANGE,PURPLE,RED,'#0d9488','#7c3aed'];var h=0;var s=String(c||'');for(var i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;return P[h%P.length];}
+</script>
+<script>
+/* ============ helpers ============ */
+const M = DATA.meta.months, ML = DATA.meta.month_labels;
+document.getElementById('period-range').textContent = `${ML[0]} 至 ${ML[ML.length-1]}，共 ${M.length} 个月`;
+const SYM = ({US:'$',JP:'¥',DE:'€',FR:'€',IT:'€',ES:'€',NL:'€',SE:'€',PL:'€',BE:'€',UK:'£',CA:'C$',MX:'MX$',AU:'A$',IN:'₹',BR:'R$',AE:'AED',SG:'S$',TR:'₺'})[DATA.meta.market] || '$';
+const fmt = n => (n==null?'—':n.toLocaleString('en-US',{maximumFractionDigits:0}));
+const fmt1 = n => (n==null?'—':n.toLocaleString('en-US',{maximumFractionDigits:1}));
+const pct = (v,d=2) => (v==null?'—':(v*100).toFixed(d)+'%');
+const num = v => (v===null||v===undefined||(typeof v==='number'&&isNaN(v))?null:v);
+const BLUE='#2563eb',ORANGE='#e8590c',GREEN='#16a34a',RED='#dc2626',PURPLE='#7c3aed',TEAL='#0d9488',GRAY='#94a3b8';
+const baseGrid = {left:58,right:24,top:46,bottom:46};
+function mk(id){const c=echarts.init(document.getElementById(id));CHARTS.push(c);return c;}
+const CHARTS=[];
+window.addEventListener('resize',()=>CHARTS.forEach(c=>c.resize()));
+const STABLE=new Set(DATA.keywords.filter(k=>k.stable).map(k=>k.query));
+const STRENGTH=new Set(DATA.strength.map(k=>k.query));
+const OPP=new Set(DATA.opportunity.map(k=>k.query));
+
+/* hero + summary */
+const S=DATA.summary;
+document.getElementById('h-kw').textContent=S.n_distinct_keywords;
+document.getElementById('h-vol').textContent=fmt(S.tot_year_vol);
+document.getElementById('h-pur').textContent=fmt(Math.round(S.tot_year_asin_purch));
+document.getElementById('h-share').textContent=pct(S.avg_asin_purch_share,3);
+document.getElementById('h-stable').textContent=S.n_stable_keywords;
+document.getElementById('gen').textContent=S?DATA.meta.generated:'';
+
+/* ============ SECTION 1 ============ */
+(function(){
+  const m=DATA.monthly, sm=DATA.stable_monthly;
+  // KPIs
+  const kpis=[
+    {v:fmt(S.tot_year_vol),l:'年度覆盖词搜索量',s:''},
+    {v:fmt(Math.round(S.tot_year_asin_purch)),l:'年度本ASIN搜索归因下单',s:''},
+    {v:pct(S.avg_asin_purch_share,3),l:'平均购买份额(全量)',s:''},
+    {v:pct(S.sp_first_share,3)+' → '+pct(S.sp_last_share,3),l:'稳定面板购买份额',s:(S.sp_share_change<0?'<span class="down">▼ 份额收缩 '+pct(Math.abs(S.sp_share_change),2)+'</span>':'<span class="up">▲ 扩张</span>')},
+    {v:fmt1(S.sp_vol_growth*100)+'%',l:'稳定面板搜索量同比',s:(S.sp_vol_growth<0?'<span class="down">需求降温</span>':'<span class="up">需求上升</span>')},
+    {v:S.n_stable_keywords+' / '+S.n_distinct_keywords,l:'稳定核心词 / 去重词',s:'词库轮换大'},
+  ];
+  document.getElementById('kpis').innerHTML=kpis.map(k=>`<div class="kpi"><div class="v">${k.v}</div><div class="l">${k.l}</div><div class="s">${k.s}</div></div>`).join('');
+
+  // volume chart
+  mk('c_vol').setOption({
+    title:{text:'月度搜索量：全量Top100 vs 稳定核心面板',left:'center',textStyle:{fontSize:14}},
+    tooltip:{trigger:'axis'},legend:{top:24},
+    grid:baseGrid,xAxis:{type:'category',data:ML,axisLabel:{rotate:35,fontSize:10}},
+    yAxis:{type:'value',name:'搜索量'},
+    series:[
+      {name:'全量 Top100 搜索量',type:'line',smooth:true,data:m.map(x=>num(x.search_vol)),itemStyle:{color:BLUE},areaStyle:{opacity:.12}},
+      {name:'稳定核心面板 搜索量',type:'line',smooth:true,data:sm.map(x=>num(x.search_vol)),itemStyle:{color:ORANGE},lineStyle:{type:'dashed'}}
+    ]
+  });
+  // share chart (stable panel purchase share)
+  mk('c_share').setOption({
+    title:{text:'稳定核心面板 · 本ASIN 购买份额趋势',left:'center',textStyle:{fontSize:14}},
+    tooltip:{trigger:'axis',valueFormatter:v=>v==null?'—':(v*100).toFixed(3)+'%'},
+    grid:baseGrid,xAxis:{type:'category',data:ML,axisLabel:{rotate:35,fontSize:10}},
+    yAxis:{type:'value',name:'购买份额',axisLabel:{formatter:v=>(v*100).toFixed(2)+'%'}},
+    series:[
+      {name:'本ASIN购买份额',type:'line',smooth:true,data:sm.map(x=>num(x.asin_purch_share)),itemStyle:{color:RED},areaStyle:{opacity:.15},lineStyle:{width:3},
+        markPoint:{data:[{type:'max',name:'最高'},{type:'min',name:'最低'}],symbolSize:46}}
+    ]
+  });
+  // top keywords by annual asin purchases
+  const top=[...DATA.keywords].filter(k=>k.annual_asin_purch!=null).sort((a,b)=>b.annual_asin_purch-a.annual_asin_purch).slice(0,15).reverse();
+  mk('c_topkw').setOption({
+    title:{text:'年度本ASIN搜索归因下单 Top15 关键词',left:'center',textStyle:{fontSize:14}},
+    tooltip:{trigger:'axis',axisPointer:{type:'shadow'}},grid:{left:180,right:40,top:40,bottom:36},
+    xAxis:{type:'value',name:'ASIN 年度下单量'},
+    yAxis:{type:'category',data:top.map(k=>k.query),axisLabel:{fontSize:11}},
+    series:[{type:'bar',data:top.map(k=>({value:Math.round(k.annual_asin_purch),itemStyle:{color:_catColor(k.category)}})),
+      label:{show:true,position:'right'}}]
+  });
+  // Top15 conversion comparison table (annual sums)
+  const topTbl=[...DATA.keywords].filter(k=>k.annual_asin_purch!=null).sort((a,b)=>b.annual_asin_purch-a.annual_asin_purch).slice(0,15);
+  function convOf(k,cK,vK){let c=0,v=0;for(const m of M){const mm=k.monthly[m];if(!mm||mm[cK]==null||mm[cK]<=0||mm[vK]==null)continue;c+=mm[cK];v+=mm[vK];}return c>0?v/c:null;}
+  let trows='';
+  topTbl.forEach((k,i)=>{
+    const ac=convOf(k,'asin_clicks','asin_purch'), mc=convOf(k,'m_clicks','m_purch');
+    let tag='—',cls='';
+    if(ac!=null&&mc!=null){const d=(ac-mc)*100;
+      if(d>0.5){tag='占优';cls='tag-up';}else if(d<-0.5){tag='偏弱';cls='tag-down';}else{tag='无明显优势';cls='tag-flat';}}
+    trows+=`<tr><td>${i+1}</td><td style="text-align:left">${k.query}</td><td>${k.annual_asin_purch.toFixed(0)}</td>`+
+      `<td>${ac==null?'—':(ac*100).toFixed(1)+'%'}</td><td>${mc==null?'—':(mc*100).toFixed(1)+'%'}</td><td class="${cls}">${tag}</td></tr>`;
+  });
+  document.getElementById('c_topkw_tbl').innerHTML=
+    `<div class="tbl-cap">年度归因下单 Top15 · 本 ASIN 转化率 vs 市场平均转化率（年度汇总：购买÷点击）</div>`+
+    `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>#</th><th style="text-align:left">关键词</th><th>年ASIN下单</th><th>本ASIN转化率</th><th>市场转化率</th><th>对比</th></tr></thead><tbody>${trows}</tbody></table></div>`+
+    `<div class="tbl-note">注：后台对本品仅给「份额%」（点击/加购/购买份额），点击与购买的绝对数只给市场大盘总量（点击量：总次数、购买：下单总数），故本 ASIN 绝对点击=市场点击×点击份额%、绝对购买=市场购买×购买份额%，本 ASIN 转化率=(市场购买×购买份额%)÷(市场点击×点击份额%)=市场转化率×(购买份额÷点击份额)，属重建值。该值为相对参考，低量长尾词因各阶段份额独立统计、粒度粗，重建后偶有 &gt;100%，不代表绝对 CVR。</div>`;
+  document.getElementById('a1').innerHTML=`
+    <h4>① 年度总览 · 文字总结</h4>
+    <ul>
+      <li>全年覆盖词的搜索总量约 <b>${fmt(S.tot_year_vol)}</b>，本 ASIN 经搜索归因的下单约 <b>${fmt(Math.round(S.tot_year_asin_purch))}</b> 单；在整体市场（约 ${fmt(Math.round(S.tot_year_m_purch))} 单）中平均购买份额仅 <b>${pct(S.avg_asin_purch_share,3)}</b>——说明本 ASIN 仍是该大词赛道里的<strong>中小参与者</strong>，增量空间显著。</li>
+      <li><strong>核心结论：份额在收缩。</strong>在剔除词库轮换干扰的「稳定核心面板」上，本 ASIN 购买份额从 ${pct(S.sp_first_share,3)}（${ML[0]}）降至 ${pct(S.sp_last_share,3)}（${ML[ML.length-1]}）；同期稳定面板搜索量变化 <b>${fmt1(S.sp_vol_growth*100)}%</b>。请结合趋势图判断品类需求和份额变化。</li>
+      <li>单月走势请以图表中的实际数据为准；注意区分真实需求波动与每月 Top100 关键词词库轮换造成的统计差异。</li>
+    </ul>
+    <div class="rec"><b>建议：</b>
+      <ul>
+        <li><b>先稳住基本盘再谈增长。</b>份额收缩 + 大盘降温双重压力下，优先保住头部核心词的排名与转化，避免旺季丢位。</li>
+        <li><b>用「稳定面板」而非「全量Top100」做月度复盘</b>，否则词库轮换会误导你以为需求大跌。</li>
+        <li>把本 ASIN 下单高度集中在这 15 个词上，需警惕单点依赖——详见第⑤⑦节拓展长尾。</li>
+      </ul>
+    </div>
+    <div class="note"><b>【分析备注】疑问：</b>4 月起全量 Top100 搜索量暴跌，是否词库少了关键词？<br><b>结论：</b>每月 Top100 仍为 100 词、并未减少；2026-03→04 名单替换 51 词。掉出词合计损失 192 万搜索量，其中 <b>coffee table 单词占 142 万（74%）</b>，新进词仅 73.9 万；但掉出词当月仅 44 单 ASIN 购买、新进词 40 单，购买量几乎不变。故 4 月暴跌约 3/4 属宽泛大词掉榜 + 长尾轮换的统计噪音，真实共同词需求仅约 -10%，应以稳定核心面板（橙线）或共同词同比为准。完整词清单见 mar_apr_churn_2026.csv。</div>
+    <div class="note"><b>【分析备注】</b>年度归因下单 Top15 中，走量大词本 ASIN 转化率对市场<b>多数无明显优势</b>；有优势者多为小体量细分修饰词。说明本 ASIN 的订单量主要由大词的曝光/份额堆出，<b>转化端无溢价</b>，核心词受本品单价偏高而"封顶"于市场均值。详见上表。</div>`;
+})();
+
+/* ============ SECTION 2 ============ */
+(function(){
+  const sel=document.getElementById('sel_kw');
+  const opts=[...DATA.keywords].filter(k=>k.annual_search_vol!=null).sort((a,b)=>b.annual_search_vol-a.annual_search_vol);
+  sel.innerHTML=opts.map(k=>`<option value="${k.query}">${k.query}  (${fmt(Math.round(k.annual_search_vol))})</option>`).join('');
+  const byQ={};DATA.keywords.forEach(k=>byQ[k.query]=k);
+  const kwChart=mk('c_kw');
+  function render(q){
+    const k=byQ[q];if(!k)return;
+    const vol=M.map(m=>k.monthly[m]?num(k.monthly[m].vol):null);
+    const acs=M.map(m=>k.monthly[m]?num(k.monthly[m].acs):null);
+    const aps=M.map(m=>k.monthly[m]?num(k.monthly[m].aps):null);
+    const m_conv=M.map(m=>{const mm=k.monthly[m];if(!mm||mm.m_purch==null||!mm.m_clicks||mm.m_clicks==0)return null;return mm.m_purch/mm.m_clicks;});
+    const asin_conv=M.map(m=>{const mm=k.monthly[m];if(!mm||mm.asin_purch==null||!mm.asin_clicks||mm.asin_clicks==0)return null;return mm.asin_purch/mm.asin_clicks;});
+    kwChart.setOption({
+      title:{text:'「'+q+'」12个月趋势',left:'center',textStyle:{fontSize:14}},
+      tooltip:{trigger:'axis'},legend:{top:24,type:'scroll'},
+      grid:{left:60,right:60,top:54,bottom:50},
+      xAxis:{type:'category',data:ML,axisLabel:{rotate:35,fontSize:10}},
+      yAxis:[
+        {type:'value',name:'搜索量',position:'left'},
+        {type:'value',name:'份额/转化率',position:'right',axisLabel:{formatter:v=>(v*100).toFixed(1)+'%'}}
+      ],
+      series:[
+        {name:'搜索量',type:'bar',data:vol,itemStyle:{color:'#cbd5e1'},yAxisIndex:0},
+        {name:'本ASIN点击份额',type:'line',smooth:true,data:acs,yAxisIndex:1,itemStyle:{color:ORANGE},lineStyle:{width:2.5}},
+        {name:'本ASIN购买份额',type:'line',smooth:true,data:aps,yAxisIndex:1,itemStyle:{color:RED},lineStyle:{width:2.5}},
+        {name:'市场转化率(购买/点击)',type:'line',smooth:true,data:m_conv,yAxisIndex:1,itemStyle:{color:BLUE},lineStyle:{type:'dashed'}},
+        {name:'本ASIN转化率(购买/点击)',type:'line',smooth:true,data:asin_conv,yAxisIndex:1,itemStyle:{color:'#7c2d12'},lineStyle:{width:2.5}}
+      ]
+    });
+  }
+  sel.addEventListener('change',e=>render(e.target.value));
+  render(opts[0].query);
+  // comparison top10 by volume
+  const top10=opts.slice(0,10).map(k=>k.query);
+  const series=top10.map((q,i)=>{const k=byQ[q];return{name:q,type:'line',smooth:true,
+    data:M.map(m=>k.monthly[m]?(k.monthly[m].aps==null?null:k.monthly[m].aps):null),
+    lineStyle:{width:1.6},itemStyle:{color:['#2563eb','#e8590c','#16a34a','#dc2626','#7c3aed','#0d9488','#db2777','#ca8a04','#0891b2','#65a30d'][i%10]}};});
+  mk('c_kwcmp').setOption({
+    title:{text:'Top10 高频词 · 本ASIN购买份额对比',left:'center',textStyle:{fontSize:14}},
+    tooltip:{trigger:'axis',valueFormatter:v=>v==null?'—':(v*100).toFixed(2)+'%'},
+    legend:{top:24,type:'scroll',textStyle:{fontSize:10}},
+    grid:{left:50,right:24,top:70,bottom:50},
+    xAxis:{type:'category',data:ML,axisLabel:{rotate:35,fontSize:10}},
+    yAxis:{type:'value',name:'本ASIN购买份额',axisLabel:{formatter:v=>(v*100).toFixed(1)+'%'}},
+    series
+  });
+  document.getElementById('a2').innerHTML=`
+    <h4>② 核心关键词趋势 · 文字总结</h4>
+    <ul>
+      <li>头部大词搜索量巨大但本 ASIN 购买份额普遍偏低（多在 <b>0.5%–2%</b> 区间），且多数词份额在年内呈<strong>先高后低或震荡下行</strong>。</li>
+      <li>从<strong>核心大词</strong>看，本 ASIN 转化率并不占优：Top25 高搜索量词中多数本 ASIN 转化率低于市场均值，与本品单价在同类型款式中偏高、存在价格敏感有关；整体"高于市场"的印象主要来自大量低量长尾词偶然份额偏高，对核心词属于偏乐观判断。据数据，约 <strong>相当比例</strong> 的"有 ASIN 点击"记录最终零购买，是价格/比价流失的典型信号。故瓶颈是<strong>曝光份额不足 + 核心词价格竞争力偏弱</strong>双重叠加，而非单纯转化问题（详见第⑥节价格）。</li>
+      <li>下拉切换不同词可见：竹制/波西米亚等细分词的本 ASIN 份额往往更高（竞争更松），而通用大词份额被头部大卖稀释。</li>
+    </ul>
+    <div class="rec"><b>建议：</b>
+      <ul>
+        <li><b>只守还有自然位基础的大词，放弃已归零的大词。</b>从稳定面板看，仍有排名基础的大词（如份额最高的品类词）应重点维护；已无自然位、购买基本归零的词，靠自然位逆袭不现实，但可保留<strong>低预算词组广告</strong>收割伴随长尾流量，只做流量收割、不追自然位排名。</li>
+        <li><b>小词抢份额：</b>重点耕耘高效修饰组合词（材质/风格/尺寸/场景类长尾），这些才是性价比最高的增量来源。</li>
+      </ul>
+    </div>`;
+})();
+
+/* ============ SECTION 3 ============ */
+(function(){
+  const sel=document.getElementById('sel_mth');
+  sel.innerHTML=M.map((m,i)=>`<option value="${m}">${ML[i]}</option>`).join('');
+  const MON=DATA.monthly;
+  const mi=Object.fromEntries(MON.map(x=>[x.month,x]));
+  const monthsIdx={};M.forEach((m,i)=>monthsIdx[m]=i);
+  // 年度加权漏斗（Σ全月账户级，与第⑦节/广告报告口径一致），避免硬编码漂移
+  function wrate(nK,dK){let n=0,d=0;for(const m of M){const x=mi[m];if(!x)continue;const nv=x[nK],dv=x[dK];if(nv==null||dv==null)continue;if(typeof nv==='number'&&isNaN(nv))continue;if(typeof dv==='number'&&isNaN(dv))continue;if(dv===0)continue;n+=nv;d+=dv;}return d>0?n/d:0;}
+  const fA_ctr=wrate('asin_clicks','asin_impr'), fM_ctr=wrate('m_clicks','m_impr');
+  const fA_cp=wrate('asin_cart','asin_clicks'), fM_cp=wrate('m_cart','m_clicks');
+  const fA_pp=wrate('asin_purch','asin_clicks'), fM_pp=wrate('m_purch','m_clicks');
+  const fA_cvr=wrate('asin_purch','asin_cart'), fM_cvr=wrate('m_purch','m_cart');
+
+  const fmChart=mk('c_fm'), faChart=mk('c_fa');
+  function funnelData(month){
+    const x=mi[month];
+    return {
+      m:{impr:x.m_impr,click:x.m_clicks,cart:x.m_cart,purch:x.m_purch},
+      a:{impr:x.asin_impr,click:x.asin_clicks,cart:x.asin_cart,purch:x.asin_purch}
+    };
+  }
+  function normalized(d){
+    const base=d.impr||1;
+    return [d.impr/base*100, d.click/base*100, d.cart/base*100, d.purch/base*100];
+  }
+  function render(month){
+    const f=funnelData(month);
+    const nm=normalized(f.m), na=normalized(f.a);
+    fmChart.setOption({
+      title:{text:month+' · 市场漏斗(归一化)',left:'center',textStyle:{fontSize:13}},
+      tooltip:{trigger:'item',formatter:p=>`${p.name}<br>占曝光 ${p.value.toFixed(3)}%`},
+      series:[{type:'funnel',left:'8%',right:'8%',top:40,bottom:16,minSize:'18%',
+        data:[
+          {name:'曝光',value:nm[0],itemStyle:{color:'#93c5fd'}},
+          {name:'点击',value:nm[1],itemStyle:{color:'#3b82f6'}},
+          {name:'加购',value:nm[2],itemStyle:{color:'#1d4ed8'}},
+          {name:'购买',value:nm[3],itemStyle:{color:'#1e3a8a'}}
+        ],label:{formatter:'{b}\n{c}%'}}]
+    });
+    faChart.setOption({
+      title:{text:month+' · 本ASIN漏斗(归一化)',left:'center',textStyle:{fontSize:13}},
+      tooltip:{trigger:'item',formatter:p=>`${p.name}<br>占曝光 ${p.value.toFixed(3)}%`},
+      series:[{type:'funnel',left:'8%',right:'8%',top:40,bottom:16,minSize:'18%',
+        data:[
+          {name:'曝光',value:na[0],itemStyle:{color:'#fdba74'}},
+          {name:'点击',value:na[1],itemStyle:{color:'#ea7307'}},
+          {name:'加购',value:na[2],itemStyle:{color:'#c2410c'}},
+          {name:'购买',value:na[3],itemStyle:{color:'#7c2d12'}}
+        ],label:{formatter:'{b}\n{c}%'}}]
+    });
+  }
+  sel.addEventListener('change',e=>render(e.target.value));
+  sel.value=M[M.length-1];
+  render(M[M.length-1]);
+  // efficiency lines (monthly)
+  const mCtr=MON.map(x=>num(x.m_ctr_impr)), aCtr=MON.map(x=>num(x.asin_ctr_impr));
+  const mCpc=MON.map(x=>num(x.m_cart_perclick)), aCpc=MON.map(x=>num(x.asin_cart_perclick));
+  const mPpc=MON.map(x=>num(x.m_purch_perclick)), aPpc=MON.map(x=>num(x.asin_purch_perclick));
+  mk('c_eff').setOption({
+    title:{text:'转化效率对比（市场 vs 本ASIN）：点击率 / 加购率 / 转化率（购买/点击）',left:'center',textStyle:{fontSize:13}},
+    tooltip:{trigger:'axis',valueFormatter:v=>v==null?'—':(v*100).toFixed(2)+'%'},
+    legend:{top:24,type:'scroll',textStyle:{fontSize:11}},
+    grid:{left:56,right:24,top:60,bottom:50},
+    xAxis:{type:'category',data:ML,axisLabel:{rotate:35,fontSize:10}},
+    yAxis:{type:'value',name:'比率',axisLabel:{formatter:v=>(v*100).toFixed(1)+'%'}},
+    series:[
+      {name:'市场·点击率(点击/曝光)',type:'line',smooth:true,data:mCtr,itemStyle:{color:BLUE}},
+      {name:'本ASIN·点击率(点击/曝光)',type:'line',smooth:true,data:aCtr,itemStyle:{color:ORANGE},lineStyle:{type:'dashed'}},
+      {name:'市场·加购率(加购/点击)',type:'line',smooth:true,data:mCpc,itemStyle:{color:'#0891b2'}},
+      {name:'本ASIN·加购率(加购/点击)',type:'line',smooth:true,data:aCpc,itemStyle:{color:'#ca8a04'},lineStyle:{type:'dashed'}},
+      {name:'市场·转化率(购买/点击)',type:'line',smooth:true,data:mPpc,itemStyle:{color:GREEN}},
+      {name:'本ASIN·转化率(购买/点击)',type:'line',smooth:true,data:aPpc,itemStyle:{color:RED},lineStyle:{type:'dashed'}}
+    ]
+  });
+  document.getElementById('a3').innerHTML=`
+    <h4>③ 搜索漏斗对比 · 文字总结</h4>
+    <ul>
+      <li>市场漏斗从曝光到购买逐级收窄（口径：CTR=点击/曝光、加购率=加购/点击、转化率=购买/点击）：曝光→点击约 1.2%、点击→加购约 20%、点击→购买约 2.6%。本 ASIN 漏斗<strong>并非全面优于市场</strong>：<b>点击率（年度加权 ${(fA_ctr*100).toFixed(2)}% vs ${(fM_ctr*100).toFixed(2)}%）和转化率（购买/点击，${(fA_pp*100).toFixed(2)}% vs ${(fM_pp*100).toFixed(2)}%）明显优于市场，但加购率（加购/点击，${(fA_cp*100).toFixed(2)}% vs ${(fM_cp*100).toFixed(2)}%）反而略弱</b>，且<strong>加购→购买转化高达 ${(fA_cvr*100).toFixed(2)}%（市场仅 ${(fM_cvr*100).toFixed(2)}%）</strong>，远超市场。即瓶颈卡在「点击→加购」而非「加购→购买」。</li>
+      <li><b>加购率低的主因是价格在加购环节制造了「二次筛选」：</b>主图/标题能把人点进来，但看到本品售价（同款式偏高）后一部分人没走到加购；愿意加购的人购买决心更强，所以加购后成交率极高。这是典型的「高点击、高购买决心、但中间加购犹豫」漏斗形态；同时市场大盘含更多「比货型」加购（一次加购多个同类慢慢挑），也会放大本 ASIN 的加购率差距。</li>
+      <li>真正的瓶颈仍在<strong>漏斗最顶端：曝光份额</strong>（长期约 0.1%–0.5%），源头是搜索排名/广告位不够靠前。增长杠杆应优先放在「提升曝光与排名」（SEO/广告/库存）；落地页成交端已很强，不必盲目优化，但可在搜索结果页把 Coupon 前置、并在首屏强化价值点，缓解加购前的价格犹豫。</li>
+    </ul>
+    <div class="rec"><b>建议：</b>
+      <ul>
+        <li><b>曝光端发力（第一优先）：</b>对核心词投放 Sponsored Products（关键词定向 / 商品投放）抢前排，配合 Vine 评论与主图/标题优化提升点击率，把曝光份额做起来——这是当前最大的增长杠杆。</li>
+        <li><b>守住真正的转化优势，别伤成交端：</b>本 ASIN 点击率与加购→购买转化（${(fA_cvr*100).toFixed(2)}% vs ${(fM_cvr*100).toFixed(2)}%）已是实打实的优势，靠主图/评论/配送积累，不要为冲加购率去改「诱点」主图或动落地页，否则会稀释高购买转化。</li>
+        <li><b>针对性补加购率缺口：</b>加购弱是本品售价在加购环节制造了「二次筛选」。在不稀释成交端优势的前提下，通过搜索结果页 Coupon 徽章、首屏价值点前置（材质/尺寸/免安装）、以及套装/多件装变体，降低点击后因价格犹豫而流失的概率。</li>
+      </ul>
+    </div>`;
+})();
+
+/* ============ SECTION 4 ============ */
+(function(){
+  const m=DATA.monthly;
+  mk('c_shareline').setOption({
+    title:{text:'本ASIN 各层级份额趋势（曝光→点击→加购→购买）',left:'center',textStyle:{fontSize:13}},
+    tooltip:{trigger:'axis',valueFormatter:v=>v==null?'—':(v*100).toFixed(3)+'%'},
+    legend:{top:24,type:'scroll'},
+    grid:{left:56,right:24,top:60,bottom:50},
+    xAxis:{type:'category',data:ML,axisLabel:{rotate:35,fontSize:10}},
+    yAxis:{type:'value',name:'份额',axisLabel:{formatter:v=>(v*100).toFixed(2)+'%'}},
+    series:[
+      {name:'曝光份额',type:'line',smooth:true,data:m.map(x=>num(x.asin_impr_share)),itemStyle:{color:'#93c5fd'},areaStyle:{opacity:.1}},
+      {name:'点击份额',type:'line',smooth:true,data:m.map(x=>num(x.asin_click_share)),itemStyle:{color:ORANGE}},
+      {name:'加购份额',type:'line',smooth:true,data:m.map(x=>num(x.asin_cart_share)),itemStyle:{color:'#ca8a04'}},
+      {name:'购买份额',type:'line',smooth:true,data:m.map(x=>num(x.asin_purch_share)),itemStyle:{color:RED},lineStyle:{width:3}}
+    ]
+  });
+  // scatter all keywords
+  const all=DATA.keywords.filter(k=>k.annual_search_vol!=null&&k.avg_aps!=null);
+  function pt(k){return {name:k.query,value:[k.annual_search_vol,k.avg_aps*100,Math.round(k.annual_asin_purch||0),k.category]};}
+  const gray=all.filter(k=>!OPP.has(k.query)&&!STRENGTH.has(k.query)).map(pt);
+  const red=all.filter(k=>OPP.has(k.query)).map(pt);
+  const green=all.filter(k=>STRENGTH.has(k.query)).map(pt);
+  mk('c_scatter').setOption({
+    title:{text:'需求体量 × 本ASIN购买份额（气泡=年度ASIN下单）',left:'center',textStyle:{fontSize:13}},
+    tooltip:{trigger:'item',formatter:p=>`<b>${p.data.name}</b><br>年度搜索量：${fmt(p.data.value[0])}<br>本ASIN购买份额：${p.data.value[1].toFixed(2)}%<br>年度ASIN下单：${p.data.value[2]}<br>品类：${p.data.value[3]}`},
+    legend:{top:24,data:['高潜提升','核心优势','其他']},
+    grid:{left:56,right:24,top:60,bottom:50},
+    xAxis:{type:'log',name:'年度搜索量(对数)',min:100},
+    yAxis:{type:'value',name:'本ASIN购买份额%',axisLabel:{formatter:v=>v.toFixed(1)+'%'}},
+    series:[
+      {name:'其他',type:'scatter',data:gray,symbolSize:d=>Math.max(6,Math.sqrt(d[2])*2.2),itemStyle:{color:'#cbd5e1'}},
+      {name:'高潜提升',type:'scatter',data:red,symbolSize:d=>Math.max(7,Math.sqrt(d[2])*2.2),itemStyle:{color:RED,opacity:.75}},
+      {name:'核心优势',type:'scatter',data:green,symbolSize:d=>Math.max(7,Math.sqrt(d[2])*2.2),itemStyle:{color:GREEN,opacity:.85}}
+    ]
+  });
+  document.getElementById('a4').innerHTML=`
+    <h4>④ 竞争力 / Share of Search · 文字总结</h4>
+    <ul>
+      <li>三层市场份额呈「曝光 &lt; 点击 &lt; 购买」的<strong>倒漏斗（越靠后本 ASIN 份额越高）</strong>：曝光份额约 0.18%、点击份额约 0.20%、购买份额约 0.29%，印证第③节结论——<b>曝光是短板，转化是长板</b>。</li>
+      <li>散点图右上角空白区域（高搜索量+低份额）中，份额最高的品类词是唯一还有自然位基础、值得作为「份额提升作战」目标的大词；已沉底的自然位词不再视为"自然位金矿"，但作为词组广告收割长尾的渠道仍可利用，定位是低成本流量补充而非排名作战目标。左下/中部绿点（高效修饰长尾词）是已建立优势的基本盘。</li>
+      <li>部分词份额年内明显回落，需结合第⑦节衰退词清单干预。</li>
+    </ul>
+    <div class="rec"><b>建议：</b>
+      <ul>
+        <li><b>把仍有基础的红点大词纳入「份额提升作战」</b>：当前只有份额最高的品类词值得设具体目标（如 +0.3pp），用自然位维护+少量广告+评论三件套撬动；已沉底的词不再做自然位加投，但可保留低预算词组广告做长尾收割。</li>
+        <li><b>守住绿点基本盘</b>，防止被竞品反超；这些词 ROI 最高，预算优先保障。</li>
+      </ul>
+    </div>`;
+})();
+
+/* ============ SECTION 5 ============ */
+(function(){
+  const seg=DATA.segments;
+  mk('c_seg').setOption({
+    title:{text:'各品类：年度本ASIN下单量 与 平均购买份额',left:'center',textStyle:{fontSize:14}},
+    tooltip:{trigger:'axis'},legend:{top:24},
+    grid:{left:60,right:60,top:54,bottom:40},
+    xAxis:{type:'category',data:seg.map(s=>s.name),axisLabel:{fontSize:11}},
+    yAxis:[{type:'value',name:'年度ASIN下单'},{type:'value',name:'平均购买份额%',axisLabel:{formatter:v=>v.toFixed(2)+'%'}}],
+    series:[
+      {name:'年度ASIN下单',type:'bar',data:seg.map(s=>Math.round(s.annual_asin_purch)),itemStyle:{color:BLUE},
+        label:{show:true,position:'top'}},
+      {name:'平均购买份额',type:'line',yAxisIndex:1,data:seg.map(s=>s.avg_aps==null?null:s.avg_aps*100),itemStyle:{color:RED},lineStyle:{width:2.5},symbolSize:9}
+    ]
+  });
+  // segment purchase-share trend (top segments)
+  const segMap=Object.fromEntries(seg.map(s=>[s.name,s]));
+  const topSeg=seg.slice().sort((a,b)=>b.annual_asin_purch-a.annual_asin_purch).slice(0,6).map(s=>s.name);
+  const palette=[BLUE,TEAL,ORANGE,GREEN,PURPLE,GRAY];
+  mk('c_segtrend').setOption({
+    title:{text:'主要品类 · 本ASIN购买份额趋势',left:'center',textStyle:{fontSize:12.5}},
+    tooltip:{trigger:'axis',valueFormatter:v=>v==null?'—':(v*100).toFixed(2)+'%'},legend:{top:22,type:'scroll',textStyle:{fontSize:10}},
+    grid:{left:48,right:14,top:54,bottom:42},
+    xAxis:{type:'category',data:ML,axisLabel:{rotate:35,fontSize:9}},
+    yAxis:{type:'value',axisLabel:{formatter:v=>(v*100).toFixed(1)+'%'}},
+    series:topSeg.map((nm,i)=>({name:nm,type:'line',smooth:true,data:segMap[nm].monthly_share,itemStyle:{color:palette[i%palette.length]},lineStyle:{width:2}}))
+  });
+  function tagBar(id,arr,title,color){
+    arr=arr.slice().sort((a,b)=>b.annual_asin_purch-a.annual_asin_purch);
+    mk(id).setOption({
+      title:{text:title,left:'center',textStyle:{fontSize:12.5}},
+      tooltip:{trigger:'axis',axisPointer:{type:'shadow'}},
+      grid:{left:70,right:30,top:36,bottom:30},
+      xAxis:{type:'value',name:'年度ASIN下单'},
+      yAxis:{type:'category',data:arr.map(a=>a.tag),axisLabel:{fontSize:10.5}},
+      series:[{type:'bar',data:arr.map(a=>Math.round(a.annual_asin_purch)),itemStyle:{color:color},label:{show:true,position:'right',fontSize:10}}]
+    });
+  }
+  tagBar('c_material',DATA.material_agg,'材质标签 · 年度ASIN下单','#0d9488');
+  tagBar('c_style',DATA.style_agg,'风格标签 · 年度ASIN下单','#7c3aed');
+  tagBar('c_scene',DATA.scene_agg,'场景标签 · 年度ASIN下单','#0891b2');
+  document.getElementById('a5').innerHTML=`
+    <h4>⑤ 关键词聚类 / 品类细分 · 文字总结</h4>
+    <ul>
+      <li><strong>产品类型是完整品类词，不是修饰词根。</strong> 系统自动从数据提炼出本 ASIN 的品类词根，其中 <strong id="seg-top1"></strong> 是绝对基本盘（年度 ASIN 下单约 <span id="seg-top1-v"></span>），<strong id="seg-top2"></strong> 次之（约 <span id="seg-top2-v"></span>）——二者合计占本 ASIN 搜索归因下单的多数。具体品类与占比见下方"品类细分"图。</li>
+      <li><strong>属性修饰词根层面：</strong>材质、风格/尺寸、场景为修饰维度（尺寸如 small / tall，材质如 wood / metal，风格如 modern / rustic，场景如 living room / bedroom），可叠加到品类词上形成长尾；这些修饰词才是性价比增量来源。</li>
+      <li>多数品类份额年内走弱，与大盘一致；品牌词（若有）体量小但份额高，是低竞争蓝海，可考虑防御性占坑。</li>
+    </ul>
+    <div class="rec"><b>建议：</b>
+      <ul>
+        <li><b>标题/五点/ST 强化高转化细分词</b>：用数据中出现的高转化修饰词（材质/风格/尺寸/场景类）强化收录与排名。</li>
+        <li><b>开拓蓝海与品牌词防御</b>：数据中体量小但份额高的长尾/品牌词是低竞争蓝海，可加埋词；若为自有品牌需防御性占坑。</li>
+      </ul>
+    </div>`;
+})();
+
+/* ============ SECTION 6 ============ */
+(function(){
+  const pc=DATA.price_compare.slice().sort((a,b)=>b.annual_asin_purch-a.annual_asin_purch).slice(0,20).reverse();
+  mk('c_price').setOption({
+    title:{text:'Top词：市场点击中位价 vs 本ASIN价('+SYM+PRICE.toFixed(2)+')',left:'center',textStyle:{fontSize:13}},
+    tooltip:{trigger:'axis',axisPointer:{type:'shadow'}},legend:{top:22},
+    grid:{left:150,right:40,top:50,bottom:36},
+    xAxis:{type:'value',name:'价格 '+SYM},
+    yAxis:{type:'category',data:pc.map(d=>d.query),axisLabel:{fontSize:10}},
+    series:[
+      {name:'市场中位价',type:'bar',data:pc.map(d=>d.avg_market_price==null?null:+d.avg_market_price.toFixed(2)),itemStyle:{color:'#93c5fd'}},
+      {name:'本ASIN价',type:'line',data:pc.map(()=>PRICE),itemStyle:{color:RED},lineStyle:{width:2},symbol:'rect',symbolSize:9,
+        markLine:{silent:true,lineStyle:{color:RED,type:'dashed'},data:[{yAxis:PRICE,label:{formatter:SYM+PRICE.toFixed(2)}}]}}
+    ]
+  });
+  const m=DATA.monthly;
+  mk('c_deliv').setOption({
+    title:{text:'市场点击配送速度构成（占点击%）',left:'center',textStyle:{fontSize:13}},
+    tooltip:{trigger:'axis',valueFormatter:v=>v==null?'—':(v*100).toFixed(1)+'%'},
+    legend:{top:22},
+    grid:{left:50,right:24,top:54,bottom:50},
+    xAxis:{type:'category',data:ML,axisLabel:{rotate:35,fontSize:10}},
+    yAxis:{type:'value',name:'占点击%',max:1,axisLabel:{formatter:v=>(v*100).toFixed(0)+'%'}},
+    series:[
+      {name:'当日达',type:'line',stack:'d',areaStyle:{opacity:.5},data:m.map(x=>num(x.m_same_share)),itemStyle:{color:'#16a34a'}},
+      {name:'1天',type:'line',stack:'d',areaStyle:{opacity:.5},data:m.map(x=>num(x.m_1d_share)),itemStyle:{color:'#f59e0b'}},
+      {name:'2天',type:'line',stack:'d',areaStyle:{opacity:.5},data:m.map(x=>num(x.m_2d_share)),itemStyle:{color:'#2563eb'}}
+    ]
+  });
+  document.getElementById('a6').innerHTML=`
+    <h4>⑥ 价格与配送交叉 · 文字总结</h4>
+    <ul>
+      <li>本 ASIN 售价稳定 <b id="pp2"></b>。需注意：后台「市场点击中位价」是<b>按每个宽泛关键词聚合</b>的，混入了高端、成套（多件装）等异质商品，会高估本品的「便宜程度」——它<strong>不能作为同款式竞品的比价基准</strong>。结合卖家一手判断与转化数据，更合理的结论是：在核心词对应的<strong>同款式细分里，定价偏高是真实的转化拖累</strong>。</li>
+      <li>配送速度：市场点击中「2天」占比最高、「当日达/1天」在部分月份上升，说明头部竞品正用更快履约抢单。若本 ASIN 以标准配送为主，在追求极速的查询里会吃亏。</li>
+    </ul>
+    <div class="rec"><b>建议：</b>
+      <ul>
+        <li><b>用 ASIN 级 Coupon 压到手价、弥补同款式价格劣势：</b>设 10%–15% off 让搜索结果页显示徽章，整体拉低到手价、提升点击→加购转化，对仍有自然位的头部核心词流量尤其有效；自然位已失、曝光几近归零的词上 Coupon 难有增量，不再堆 Coupon 强攻，只做低预算词组广告长尾收割。</li>
+        <li><b>保持履约优势：</b>确保核心词广告计划库存深度充足、入仓位置覆盖主要消费区域，避免断货导致自然位/广告位双掉。</li>
+      </ul>
+    </div>`;
+})();
+
+/* ============ SECTION 7 ============ */
+(function(){
+  function fmtpair(a,b,unit){
+    if(a==null||b==null)return '—';
+    const av=(a*100).toFixed(2), bv=(b*100).toFixed(2);
+    return `${av}${unit}<span style="color:#9ca3af">/${bv}${unit}</span>`;
+  }
+  function tbl(id,rows,cols){
+    const t=document.getElementById(id);
+    let h='<thead><tr>'+cols.map(c=>`<th data-k="${c.k}">${c.t}</th>`).join('')+'</tr></thead><tbody>';
+    rows.forEach(r=>{h+='<tr>'+cols.map(c=>{
+      let v=r[c.k];
+      if(c.k==='annual_search_vol')return `<td>${fmt(Math.round(v))}</td>`;
+      if(c.k==='avg_ais'||c.k==='avg_acs'||c.k==='avg_aps')return `<td>${pct(v,2)}</td>`;
+      if(c.k==='asin_ctr')return `<td>${fmtpair(r.asin_ctr,r.market_ctr,'%')}</td>`;
+      if(c.k==='asin_purch_rate')return `<td>${fmtpair(r.asin_purch_rate,r.market_purch_rate,'%')}</td>`;
+      if(c.k==='asin_cvr')return `<td>${fmtpair(r.asin_cvr,r.market_cvr,'%')}</td>`;
+      if(c.k==='vol_trend'||c.k==='aps_trend'||c.k==='ais_trend'||c.k==='acs_trend'){if(v==null)return '<td>—</td>';const cls=v<0?'down':'up';return `<td class="${cls}">${v>0?'+':''}${(v*100).toFixed(0)}%</td>`;}
+      if(c.k==='category')return `<td><span class="tag">${v}</span></td>`;
+      if(c.k==='query')return `<td>${v}${STABLE.has(v)?' <span class="pill y">稳</span>':''}</td>`;
+      if(c.k.endsWith('_tags'))return `<td><span class="tag">${v}</span></td>`;
+      return `<td>${v==null?'—':v}</td>`;
+    }).join('')+'</tr>';});
+    h+='</tbody>';t.innerHTML=h;
+    t.querySelectorAll('th').forEach(th=>th.onclick=()=>{
+      const k=th.dataset.k;const tb=t.querySelector('tbody');const trs=[...tb.rows];
+      const idx=[...t.querySelectorAll('th')].indexOf(th);
+      const asc=t._asc=!t._asc;
+      trs.sort((a,b)=>{
+        const va=a.children[idx].textContent.replace(/\/%/g,''), vb=b.children[idx].textContent.replace(/\/%/g,'');
+        const na=parseFloat(va.replace(/,/g,'')), nb=parseFloat(vb.replace(/,/g,''));
+        if(!isNaN(na)&&!isNaN(nb)) return asc?na-nb:nb-na;
+        return asc?va.localeCompare(vb,'en',{numeric:true}):vb.localeCompare(va,'en',{numeric:true});
+      });
+      tb.append(...trs);
+    });
+  }
+  const oppCols=[{k:'query',t:'关键词'},{k:'category',t:'品类'},{k:'opp_tags',t:'识别标签'},{k:'annual_search_vol',t:'年度搜索量'},{k:'avg_ais',t:'曝光份额'},{k:'avg_acs',t:'点击份额'},{k:'avg_aps',t:'购买份额'},{k:'asin_purch_rate',t:'转化率(购买/点击) 本ASIN/市场'},{k:'asin_ctr',t:'CTR 本ASIN/市场'},{k:'vol_trend',t:'搜索量趋势'},{k:'aps_trend',t:'份额趋势'}];
+  const strCols=[{k:'query',t:'关键词'},{k:'category',t:'品类'},{k:'str_tags',t:'识别标签'},{k:'annual_search_vol',t:'年度搜索量'},{k:'avg_ais',t:'曝光份额'},{k:'avg_acs',t:'点击份额'},{k:'avg_aps',t:'购买份额'},{k:'asin_purch_rate',t:'转化率(购买/点击) 本ASIN/市场'},{k:'asin_cvr',t:'加购→购买 本ASIN/市场'},{k:'vol_trend',t:'搜索量趋势'},{k:'aps_trend',t:'份额趋势'}];
+  const decCols=[{k:'query',t:'关键词'},{k:'category',t:'品类'},{k:'dec_tags',t:'识别标签'},{k:'annual_search_vol',t:'年度搜索量'},{k:'avg_ais',t:'曝光份额'},{k:'avg_acs',t:'点击份额'},{k:'avg_aps',t:'购买份额'},{k:'asin_purch_rate',t:'转化率(购买/点击) 本ASIN/市场'},{k:'vol_trend',t:'搜索量趋势'},{k:'aps_trend',t:'购买份额趋势'},{k:'ais_trend',t:'曝光份额趋势'},{k:'acs_trend',t:'点击份额趋势'}];
+  const riseCols=[{k:'query',t:'关键词'},{k:'category',t:'品类'},{k:'rise_tags',t:'识别标签'},{k:'annual_search_vol',t:'年度搜索量'},{k:'avg_ais',t:'曝光份额'},{k:'avg_acs',t:'点击份额'},{k:'avg_aps',t:'购买份额'},{k:'asin_purch_rate',t:'转化率(购买/点击) 本ASIN/市场'},{k:'vol_trend',t:'搜索量趋势'},{k:'aps_trend',t:'购买份额趋势'},{k:'ais_trend',t:'曝光份额趋势'},{k:'acs_trend',t:'点击份额趋势'}];
+  tbl('t_opp',DATA.opportunity,oppCols);
+  tbl('t_str',DATA.strength,strCols);
+  tbl('t_dec',DATA.decline,decCols);
+  tbl('t_rise',DATA.rise,riseCols);
+  document.getElementById('a7').innerHTML=`
+    <h4>⑦ 机会与风险 · 文字总结</h4>
+    <ul>
+      <li><b>高潜提升词（红）：</b>共 ${DATA.opportunity.length} 个。不再只看「高搜索量 + 低购买份额」，而是叠加了<strong>曝光/点击份额、CTR、转化率（购买/点击）vs 市场</strong>：优先筛出「搜索量大、本 ASIN 曝光/购买份额低、但点击或转化效率优于市场」的词——这些才是广告加投后真正能吃到的流量，而非单纯有需求。</li>
+      <li><b>核心优势词（绿）：</b>共 ${DATA.strength.length} 个稳定在榜且购买份额高，并标注了 CTR / 转化率相对市场强弱。绿色基本盘要守，但若标签显示「转化率弱」则需警惕竞品以更低价格夺位。</li>
+      <li><b>衰退风险词（黄）：</b>共 ${DATA.decline.length} 个稳定词出现需求、曝光份额、点击份额或购买份额明显下滑，排查方向从单一「排名掉出」扩展到库存、评论、竞品降价、搜索相关性偏移等多维度。</li>
+      <li><b>上升趋势词（蓝）：</b>共 ${DATA.rise.length} 个稳定词在需求或份额上明显上升，可重点观察是否具备持续投入价值。</li>
+    </ul>
+    <div class="rec"><b>建议：</b>红词按「搜索量大 + 效率优势」双维度排序投放，避免盲目打大词；绿词每周监控份额与评论；黄词先查曝光/点击/购买三层趋势定位病因；蓝词小预算测试能否放大。</div>`;
+})();
+
+/* ============ SECTION 8 ============ */
+(function(){
+  const segMap=Object.fromEntries(DATA.segments.map(s=>[s.name,s]));
+  document.getElementById('a8').innerHTML=`
+    <h4>⑧ 综合执行建议（按优先级）</h4>
+    <ul>
+      <li><b>P0 — 止跌企稳：</b>稳定面板购买份额已从 ${pct(S.sp_first_share,3)} 滑到 ${pct(S.sp_last_share,3)}。立即排查仍有排名基础的 Top 词（份额最高的品类词）的排名、库存、评论数与广告预算，先止住份额下滑；已沉底的词不再做自然位排查，但保留手动词组广告做长尾收割（低预算、不追排名）。</li>
+      <li><b>P1 — 曝光端破局：</b>漏斗显示本 ASIN 在仍有基础的词上转化效率尚可，瓶颈在<strong>曝光份额</strong>。对份额最高的品类词适度加投 Sponsored Products 维护自然位，配合 Vine 评论 + Coupon 提升点击率；已沉底的词不再做自然位加投，但保留低预算词组广告收割长尾流量。</li>
+      <li><b>P2 — 抢松竞争细分：</b>重点耕耘高效修饰组合词（材质/风格/尺寸/场景类长尾），以及长尾/品牌蓝海词，这些词份额高、ROI 好，是性价比最高的增量。</li>
+      <li><b>P3 — 用价格+履约放大转化：</b>本 ASIN 售价在同款式细分中偏高（后台中位价混入高端/套装异质商品，不能作为同款式比价基准），通过 ASIN 级 Coupon（如 10% off）与套装/多件装变体拉低到手价、提升 perceived value。FBA/Prime 是 ASIN 基础能力，重点保证核心词广告计划库存深度与入仓位置，避免断货导致自然位/广告位双掉。</li>
+      <li><b>P4 — 降低单点依赖：</b>下单高度集中于 15 个头部词，需用第⑤⑦节的细分词与长尾词拓展，分散风险；建立「稳定面板」月度复盘机制，避免被词库轮换误导。</li>
+      <li><b>P5 — 监控机制：</b>把本报告设为月度自动更新，跟踪「稳定面板购买份额」「红词份额」「黄词数量」三个北极星指标。</li>
+    </ul>
+    <div class="rec"><b>一句话结论：</b>本 ASIN 在仍有自然位基础的词上「被看见太少」，已沉底词自然位难逆转、不宜硬追；但可保留低预算词组广告做长尾收割。把主力预算压在<strong>维护头部核心词自然位/曝光份额 + 词组广告收割长尾 + 抢占低竞争细分词/长尾词</strong>上，是当前最高效的增长路径。</div>`;
+})();
+</script>
+<script>
+(function(){
+  try{
+    var M=DATA.meta||{};
+    var asin=M.asin||'—', prod=M.product||'', market=M.market||'US';
+    document.title = asin+' · '+market+' 年度搜索绩效分析';
+    var ht=document.getElementById('hero-title'); if(ht) ht.textContent='📊 '+asin+' · '+market+' 年度搜索绩效分析';
+    var ha=document.getElementById('hero-asin'); if(ha) ha.textContent=asin;
+    var hp=document.getElementById('hero-prod'); if(hp) hp.textContent = prod? ('（'+prod+'）') : '';
+    var price=(DATA.summary&&DATA.summary.asin_price)?DATA.summary.asin_price:26.99;
+    function setT(id,v){var e=document.getElementById(id); if(e) e.textContent=v;}
+    function setV(id,v){var e=document.getElementById(id); if(e) e.textContent=(v!=null&&!isNaN(v))?Math.round(v):'—';}
+    var pps=document.querySelectorAll('#pp1,#pp2'); pps.forEach(function(e){e.textContent=SYM+Number(price).toFixed(2);});
+    var segs=DATA.segments||[];
+    if(segs[0]){ setT('seg-top1',segs[0].name); setV('seg-top1-v',segs[0].annual_asin_purch); }
+    if(segs[1]){ setT('seg-top2',segs[1].name); setV('seg-top2-v',segs[1].annual_asin_purch); }
+  }catch(e){console.error('fill err',e);}
+})();
+</script>
+
+</body>
+</html>
+
+

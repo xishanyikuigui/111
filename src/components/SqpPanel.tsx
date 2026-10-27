@@ -30,6 +30,8 @@ import { SQPRow, CompareRow } from '../types';
 import { cleanNum, cleanPct, cleanSqpShare, parsePriceStr, getDiagnosis, getTrendInterpretation } from '../utils/analyzers';
 import { downloadSqpAnnualPdf } from '../utils/sqpAnnualPdf';
 
+const REPORT_API_URL = (import.meta.env.VITE_REPORT_API_URL || '').replace(/\/$/, '');
+
 // Common Amazon English catalog stopwords to filter noise
 const STOP_WORDS = new Set([
   'for', 'with', 'of', 'and', 'the', 'a', 'to', 'in', 'by', 'on', 'at', 'under', 'or', 'an', 
@@ -278,6 +280,11 @@ export default function SqpPanel({
   // States for monthly SQP reports (1-12)
   const [monthlySqpData, setMonthlySqpData] = useState<Record<number, { fileName: string; rowCount: number; rows: SQPRow[]; period?: string }>>({});
   const [monthlyStatus, setMonthlyStatus] = useState<string>('');
+  const [skillSqpFiles, setSkillSqpFiles] = useState<File[]>([]);
+  const [skillAdFiles, setSkillAdFiles] = useState<File[]>([]);
+  const [skillReportUrl, setSkillReportUrl] = useState<string>('');
+  const [skillReportStatus, setSkillReportStatus] = useState<string>('');
+  const [skillReportBusy, setSkillReportBusy] = useState(false);
   const [selectedAnnualKw, setSelectedAnnualKw] = useState<string>('__TOP20_ASIN__');
   const [annualKwSearch, setAnnualKwSearch] = useState<string>('');
   const [annualTrendDimension, setAnnualTrendDimension] = useState<'search' | 'impression' | 'click' | 'conversion'>('search');
@@ -663,6 +670,39 @@ export default function SqpPanel({
         }
       );
     });
+  };
+
+  const generateFullSkillReport = async () => {
+    if (!REPORT_API_URL) {
+      setSkillReportStatus('⚠️ 报告服务尚未配置。请先完成 Render 部署，再在 GitHub Actions Variables 中设置 VITE_REPORT_API_URL。');
+      return;
+    }
+    if (!skillSqpFiles.length) {
+      setSkillReportStatus('⚠️ 请先选择全年月度 SQP CSV（可多选）。');
+      return;
+    }
+    setSkillReportBusy(true);
+    setSkillReportStatus('⏳ 正在将源文件发送到你的报告服务并生成完整报告…');
+    try {
+      const form = new FormData();
+      skillSqpFiles.forEach(file => form.append('sqp', file));
+      skillAdFiles.forEach(file => form.append('ads', file));
+      form.append('market', 'US');
+      const response = await fetch(`${REPORT_API_URL}/api/reports`, { method: 'POST', body: form });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || `报告服务返回 ${response.status}`);
+      }
+      const html = await response.blob();
+      if (skillReportUrl) URL.revokeObjectURL(skillReportUrl);
+      const url = URL.createObjectURL(html);
+      setSkillReportUrl(url);
+      setSkillReportStatus(`✅ 已生成完整报告：SQP ${skillSqpFiles.length} 份，广告 ${skillAdFiles.length} 份。报告仅保留在当前浏览器会话，可下载保存。`);
+    } catch (error) {
+      setSkillReportStatus(`❌ ${error instanceof Error ? error.message : '报告生成失败，请重试。'}`);
+    } finally {
+      setSkillReportBusy(false);
+    }
   };
 
   const allMonthlyKeywords = useMemo(() => {
@@ -2881,6 +2921,39 @@ export default function SqpPanel({
           ) : (
             /* Annual Trend Aggregation Panel */
             <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-6 shadow-sm">
+              <div className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-5 space-y-4">
+                <div>
+                  <h4 className="text-sm font-extrabold text-slate-800 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-blue-700" /> 完整 Skill 报告（与参考 dashboard 一致）
+                  </h4>
+                  <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
+                    上传原始 CSV 后，由你的 Render 服务运行 <code>amazon-sqp-ad-report</code> 原始管线，生成完整八章节 HTML：年度漏斗、份额趋势、机会/优势/风险、价格配送及广告交叉分析。
+                  </p>
+                </div>
+                <div className="grid md:grid-cols-2 gap-3">
+                  <label className="block rounded-lg border border-dashed border-blue-300 bg-white/80 p-3 cursor-pointer hover:border-blue-500">
+                    <span className="block text-xs font-bold text-slate-700">① 全年月度 SQP CSV（必填）</span>
+                    <span className="block text-[11px] text-slate-500 mt-1">选择 1-12 份月度原始导出文件</span>
+                    <input type="file" multiple accept=".csv" className="mt-2 block w-full text-xs" onChange={e => setSkillSqpFiles(Array.from(e.target.files || []))} />
+                    {skillSqpFiles.length > 0 && <span className="block text-[11px] text-emerald-700 font-bold mt-1">已选择 {skillSqpFiles.length} 份 SQP 文件</span>}
+                  </label>
+                  <label className="block rounded-lg border border-dashed border-indigo-300 bg-white/80 p-3 cursor-pointer hover:border-indigo-500">
+                    <span className="block text-xs font-bold text-slate-700">② 近 30 天广告 CSV（可选）</span>
+                    <span className="block text-[11px] text-slate-500 mt-1">广告活动、搜索词、投放三份文件；不传则只生成 SQP 部分</span>
+                    <input type="file" multiple accept=".csv" className="mt-2 block w-full text-xs" onChange={e => setSkillAdFiles(Array.from(e.target.files || []))} />
+                    {skillAdFiles.length > 0 && <span className="block text-[11px] text-emerald-700 font-bold mt-1">已选择 {skillAdFiles.length} 份广告文件</span>}
+                  </label>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button onClick={() => void generateFullSkillReport()} disabled={skillReportBusy} className="bg-blue-700 hover:bg-blue-800 disabled:bg-slate-400 text-white font-bold text-xs px-4 py-2.5 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed">
+                    {skillReportBusy ? '正在生成完整报告…' : '生成完整同款报告'}
+                  </button>
+                  {skillReportUrl && <a href={skillReportUrl} download="search_performance_dashboard.html" className="text-xs font-bold text-blue-700 hover:underline">下载单文件 HTML 报告</a>}
+                  {skillReportStatus && <span className="text-[11px] text-slate-600">{skillReportStatus}</span>}
+                </div>
+                {skillReportUrl && <iframe title="完整 SQP × 广告分析报告" src={skillReportUrl} className="w-full h-[78vh] rounded-lg border border-blue-200 bg-white" />}
+              </div>
+
               {/* Header */}
               <div className="bg-gradient-to-r from-emerald-50/20 to-teal-50/5 p-4.5 rounded-xl border border-emerald-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="space-y-1">
