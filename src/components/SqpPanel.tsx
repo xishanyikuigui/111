@@ -28,6 +28,7 @@ import {
 } from 'recharts';
 import { SQPRow, CompareRow } from '../types';
 import { cleanNum, cleanPct, cleanSqpShare, parsePriceStr, getDiagnosis, getTrendInterpretation } from '../utils/analyzers';
+import { downloadSqpAnnualPdf } from '../utils/sqpAnnualPdf';
 
 // Common Amazon English catalog stopwords to filter noise
 const STOP_WORDS = new Set([
@@ -3291,14 +3292,24 @@ export default function SqpPanel({
                         </p>
                       </div>
                       
-                      <button
-                        onClick={annualViewMode === 'root' ? downloadRootTrendData : downloadTrendData}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-3 py-2 rounded-lg flex items-center gap-1.5 transition-all shadow-3xs shrink-0 cursor-pointer"
-                        title="下载当前选中词根或 Top 20 词的完整月度趋势表格"
-                      >
-                        <FileSpreadsheet className="w-3.5 h-3.5" />
-                        下载趋势数据
-                      </button>
+                      <div className="flex flex-wrap gap-2 shrink-0">
+                        <button
+                          onClick={() => void downloadSqpAnnualPdf(monthlySqpData).catch(error => alert(error instanceof Error ? error.message : 'PDF 生成失败，请重试。'))}
+                          className="bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs px-3 py-2 rounded-lg flex items-center gap-1.5 transition-all shadow-3xs cursor-pointer"
+                          title="按已上传的月度 SQP 文件生成并下载中文 PDF 报告"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          生成年度 PDF 报告
+                        </button>
+                        <button
+                          onClick={annualViewMode === 'root' ? downloadRootTrendData : downloadTrendData}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-3 py-2 rounded-lg flex items-center gap-1.5 transition-all shadow-3xs cursor-pointer"
+                          title="下载当前选中词根或 Top 20 词的完整月度趋势表格"
+                        >
+                          <FileSpreadsheet className="w-3.5 h-3.5" />
+                          下载趋势数据
+                        </button>
+                      </div>
                     </div>
 
                     {/* Top 20 Aggregate & Keyword KPI Summary Toolbar */}
