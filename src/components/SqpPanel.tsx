@@ -30,7 +30,10 @@ import { SQPRow, CompareRow } from '../types';
 import { cleanNum, cleanPct, cleanSqpShare, parsePriceStr, getDiagnosis, getTrendInterpretation } from '../utils/analyzers';
 import { downloadSqpAnnualPdf } from '../utils/sqpAnnualPdf';
 
-const REPORT_API_URL = (import.meta.env.VITE_REPORT_API_URL || '').replace(/\/$/, '');
+// 可用环境变量覆写；默认连接本项目的 Render 动态报告服务。
+const REPORT_API_URL = (
+  import.meta.env.VITE_REPORT_API_URL || 'https://amzws-sqp-report-service.onrender.com'
+).replace(/\/$/, '');
 
 // Common Amazon English catalog stopwords to filter noise
 const STOP_WORDS = new Set([
@@ -674,7 +677,7 @@ export default function SqpPanel({
 
   const generateFullSkillReport = async () => {
     if (!REPORT_API_URL) {
-      setSkillReportStatus('⚠️ 报告服务尚未配置。请先完成 Render 部署，再在 GitHub Actions Variables 中设置 VITE_REPORT_API_URL。');
+      setSkillReportStatus('⚠️ 报告服务地址未配置，请联系管理员检查部署设置。');
       return;
     }
     if (!skillSqpFiles.length) {
