@@ -35,6 +35,9 @@ const REPORT_API_URL = (
   import.meta.env.VITE_REPORT_API_URL || 'https://amzws-sqp-report-service.onrender.com'
 ).replace(/\/$/, '');
 
+// 旧版本地月度卡槽保留在源码中。需要恢复时改为 true 即可。
+const SHOW_LEGACY_ANNUAL_TREND = false;
+
 // Common Amazon English catalog stopwords to filter noise
 const STOP_WORDS = new Set([
   'for', 'with', 'of', 'and', 'the', 'a', 'to', 'in', 'by', 'on', 'at', 'under', 'or', 'an', 
@@ -2957,7 +2960,9 @@ export default function SqpPanel({
                 {skillReportUrl && <iframe title="完整 SQP × 广告分析报告" src={skillReportUrl} className="w-full h-[78vh] rounded-lg border border-blue-200 bg-white" />}
               </div>
 
-              {/* Header */}
+              {SHOW_LEGACY_ANNUAL_TREND && (
+                <>
+              {/* Legacy annual trend panel: retained for future re-enablement. */}
               <div className="bg-gradient-to-r from-emerald-50/20 to-teal-50/5 p-4.5 rounded-xl border border-emerald-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="space-y-1">
                   <h4 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
@@ -3926,6 +3931,8 @@ export default function SqpPanel({
                     />
                   </div>
                 </div>
+              )}
+                </>
               )}
             </div>
           )}
