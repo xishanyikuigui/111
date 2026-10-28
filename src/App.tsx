@@ -18,6 +18,8 @@ import AiPanel from './components/AiPanel';
 import DocsPanel from './components/DocsPanel';
 import ReorderPanel from './components/ReorderPanel';
 
+const DESIGN_CREDIT = 'Designed & Developed by Home Organization Team';
+
 export default function App() {
   const [isLocked, setIsLocked] = useState(false);
   const hasMounted = useRef(false);
@@ -25,13 +27,13 @@ export default function App() {
   useEffect(() => {
     // 💻 极客范高亮控制台签名 (Console Developer Banner)
     console.log(
-      '%c🚀 Amazon Data Analyzer %c Designed & Developed by Zhou Liang %c',
+      `%c🚀 Amazon Data Analyzer %c ${DESIGN_CREDIT} %c`,
       'background: #1e293b; color: #38bdf8; padding: 6px 12px; border-radius: 4px 0 0 4px; font-weight: bold; font-family: system-ui;',
       'background: linear-gradient(135deg, #2563eb 0%, #ef4444 100%); color: #ffffff; padding: 6px 12px; border-radius: 0 4px 4px 0; font-weight: bold; font-family: system-ui;',
       'background: transparent'
     );
     console.log(
-      '%c⚠️ 著作权及安保警告 (Security Alert)\n%c未经著作权开发者[周亮]授权，严禁进行二次克隆分发或用于商业目的！本系统内置完整的代码自毁与防篡改引擎，任何对版权声明、署名栏的修改、篡改或隐藏均会导致系统全面自动锁定并冻结所有高级计算分析工作效。',
+      '%c⚠️ 著作权及安保警告 (Security Alert)\n%c未经 Home Organization Team 授权，严禁进行二次克隆分发或用于商业目的！本系统内置完整的代码自毁与防篡改引擎，任何对版权声明、署名栏的修改、篡改或隐藏均会导致系统全面自动锁定并冻结所有高级计算分析工作效。',
       'color: #ef4444; font-size: 14px; font-weight: bold; font-family: monospace;',
       'color: #475569; font-size: 12px; font-family: monospace; line-height: 1.6;'
     );
@@ -56,7 +58,7 @@ export default function App() {
 
       // Check text content - must contain original signature
       const text = textEl.textContent || '';
-      if (!text.includes('Zhou Liang') || !text.includes('Designed & Developed')) {
+      if (!text.includes(DESIGN_CREDIT)) {
         return false;
       }
 
@@ -185,7 +187,7 @@ export default function App() {
                   系统免责及知识产权声明 (Copyright and Safety Agreement)
                 </p>
                 <p>
-                  1. 亚马逊电商数据融合分析工作台的所有权与原创意归属开发者 <strong className="text-red-400">[周亮](Zhou Liang)</strong> 共有。
+                  1. 亚马逊电商数据融合分析工作台的所有权与原创意归属 <strong className="text-red-400">Home Organization Team</strong>。
                 </p>
                 <p>
                   2. 未经著作权所有者明确书面授权，严禁对本系统的任何逻辑、源码进行恶意二开、二次克隆分发、商用，或擦除/淡化任何形式的原创版权页脚。
@@ -196,7 +198,7 @@ export default function App() {
               </div>
 
               <div className="p-3 bg-red-950/20 border border-red-900/30 rounded-lg text-amber-500 text-center font-bold text-[11px]">
-                💡 怎么恢复系统：请确保系统页脚原封不动地保持可见，并包含有效的 "Designed & Developed by Zhou Liang" 版权标识！
+                💡 怎么恢复系统：请确保系统页脚原封不动地保持可见，并包含有效的 "Designed & Developed by Home Organization Team" 版权标识！
               </div>
             </div>
 
@@ -356,7 +358,7 @@ export default function App() {
           className="font-medium text-slate-500 block pointer-events-auto"
           style={{ display: 'inline-block', visibility: 'visible', opacity: 1 }}
         >
-          亚马逊电商数据融合分析工作台 &copy; 2026. Designed & Developed by Zhou Liang
+          亚马逊电商数据融合分析工作台 &copy; 2026. {DESIGN_CREDIT}
         </p>
       </footer>
     </div>
