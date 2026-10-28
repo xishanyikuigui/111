@@ -235,9 +235,9 @@ export default function App() {
           <div className="bg-slate-800/80 border border-slate-700/60 p-4 rounded-xl flex items-center gap-3 shadow-lg shrink-0">
             <ShieldCheck className="w-10 h-10 text-emerald-500 shrink-0" />
             <div>
-              <p className="text-xs font-bold text-slate-200">100% 浏览器安全算效</p>
+              <p className="text-xs font-bold text-slate-200">本地分析优先 · 完整报告按需云端生成</p>
               <p className="text-[10px] text-slate-400 mt-0.5 leading-normal max-w-[180px]">
-                所有数据解析与矩阵运算全在浏览器本端完成，不上传服务器，全流程安全无泄漏。
+                常规看板在浏览器本地处理；“完整 Skill 报告”会将你主动选择的文件发送至 Render 服务生成同款报告，任务结束后自动清理临时文件。
               </p>
             </div>
           </div>
